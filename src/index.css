@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-poppins: "Poppins", sans-serif;
+  --color-navy-900: #0f172a;
+  --color-cobalt-600: #1e40af;
+  --color-deep-dark: #020617;
+  --color-neon-cobalt: #0047FF;
+  --color-hot-pink: #FF007F;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 transition-colors duration-300;
+  }
+  
+  .dark body {
+    @apply bg-deep-dark text-slate-200;
+  }
+
+  html.light, html.light body, .light body {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+  
+  /* Force clean light mode on structural elements when light mode is explicitly enabled */
+  html.light .dashboard-content-wrapper,
+  html.light .main-layout-container,
+  html.light .auth-container, html.light .dashboard-container {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+  
+  html.light .auth-card, html.light .dashboard-panel {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
+  }
+  html.light .auth-card h1,
+  html.light .auth-card h2 {
+    color: #0f172a !important;
+  }
+  html.light .auth-card p {
+    color: #475569 !important;
+  }
+  html.light .auth-card label {
+    color: #64748b !important;
+  }
+  html.light .auth-card input {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+  html.light .auth-card input::placeholder {
+    color: #94a3b8 !important;
+  }
+  
+  html.light .landing-container {
+    background-color: #ffffff !important;
+  }
+  html.light .landing-container h1.dark\:text-white,
+  html.light .landing-container h2.dark\:text-white {
+    color: #0f172a !important;
+  }
+  html.light .landing-container p.dark\:text-slate-400 {
+    color: #64748b !important;
+  }
+}

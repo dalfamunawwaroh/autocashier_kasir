@@ -1,0 +1,7 @@
+{
+  "name": "AutoCashier - Koperasi GIAT",
+  "description": "High-performance AI-driven Retail POS for Koperasi GIAT Telkom University.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
