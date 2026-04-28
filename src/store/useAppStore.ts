@@ -13,6 +13,8 @@ interface AppState {
   setTheme: (theme: Theme) => void;
   setIdentity: (user: { name: string; role: string; phone?: string }, isMember: boolean) => void;
   clearSession: () => void;
+  setIsMember: (val: boolean) => void;
+  setLanguage: (lang: Language) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -22,16 +24,30 @@ export const useAppStore = create<AppState>()(
       theme: 'dark',
       user: null,
       isMember: false,
+
+      // Actions
       toggleLanguage: () => set((state) => ({ language: state.language === 'id' ? 'en' : 'id' })),
+      
       setTheme: (theme) => set({ theme }),
+      
       setIdentity: (user, isMember) => set({ user, isMember }),
-      clearSession: () => set({ user: null, isMember: false })
+      
+      setIsMember: (val) => set({ isMember: val }),
+
+      setLanguage: (lang) => set({ language: lang }),
+
+      clearSession: () => set({ 
+        user: null, 
+        isMember: false 
+      }),
     }),
-    { name: 'app-settings' }
+    { 
+      name: 'app-settings' // Nama key di LocalStorage
+    }
   )
 );
 
-// Comprehensive Translation Dictionary for Vision-First Flow
+// Comprehensive Translation Dictionary
 export const translations = {
   id: {
     START_CHECKOUT: "Mulai Kasir",
@@ -39,7 +55,7 @@ export const translations = {
     DETECTING: "AI Mencari Objek...",
     DETECTED: "Terdeteksi",
     SCAN_DONE: "Selesai",
-    CART_TITLE: "Keranjang",
+    CART_TITLE: "Keranjang Belanja",
     EMPTY_CART: "Belum ada barang",
     IDENTITY_TITLE: "Cek Keanggotaan",
     IDENTITY_SUB: "Masukkan WhatsApp untuk cek promo atau tekan Lewati",
@@ -64,7 +80,7 @@ export const translations = {
     DETECTING: "AI Scanning...",
     DETECTED: "Detected",
     SCAN_DONE: "Done",
-    CART_TITLE: "Cart",
+    CART_TITLE: "Shopping Cart",
     EMPTY_CART: "No items yet",
     IDENTITY_TITLE: "Identity Check",
     IDENTITY_SUB: "Enter WhatsApp to check promos or skip",
@@ -84,4 +100,3 @@ export const translations = {
     AUTO_RESET_MSG: "System resetting in 5 seconds",
   }
 };
-
