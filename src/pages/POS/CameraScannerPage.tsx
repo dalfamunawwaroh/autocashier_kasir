@@ -1,12 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ShoppingBag, Scan, ShieldCheck, Loader2 } from 'lucide-react';
+import {
+  ChevronRight,
+  ShoppingBag,
+  Scan,
+  ShieldCheck,
+  Loader2,
+  Phone,
+  ArrowRight,
+  SkipForward,
+  AlertCircle,
+  X,
+  Zap
+} from 'lucide-react';
 import * as tf from '@tensorflow/tfjs';
 import * as cocossd from '@tensorflow-models/coco-ssd';
 import { useAppStore, translations } from '../../store/useAppStore';
 
-// EXPORT ini penting supaya CartSummaryPage bisa mengenali tipenya
+// --- TYPES ---
 export interface CartItem {
   id: string | number;
   label: string;
@@ -21,6 +33,101 @@ const LOCAL_PRICE_MAP: Record<string, any> = {
   'aqua_600ml': { id: 'prod_002', label: 'aqua_600ml', name: 'Aqua 600ml', price: 3500 }
 };
 
+// --- COMPONENT: IDENTITY CHECK MODAL ---
+interface IdentityCheckModalProps {
+  onClose: () => void;
+  cartItems: CartItem[];
+}
+
+function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
+  const navigate = useNavigate();
+  const { language, setIdentity } = useAppStore();
+  const t = translations[language];
+
+  const [phone, setPhone] = useState('');
+  const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCheckMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phone) return;
+
+    setIsLoading(true);
+    setErrorStatus(null);
+
+    setTimeout(() => {
+      if (phone === '081234') {
+        const user = { name: 'Demo Member', role: 'kasir', phone };
+        setIdentity(user, true);
+        navigate('/cart', { state: { items: cartItems } });
+      } else {
+        setErrorStatus(t.WA_NOT_FOUND);
+        setIdentity({ name: 'Guest', role: 'kasir' }, false);
+        setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 2000);
+      }
+      setIsLoading(false);
+    }, 1000);
+  };
+
+  const handleSkip = () => {
+    setIdentity({ name: 'Guest', role: 'kasir' }, false);
+    navigate('/cart', { state: { items: cartItems } });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/80 backdrop-blur-md"
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="w-full max-w-md bg-[#020617] border border-white/10 p-10 rounded-[3.5rem] shadow-2xl relative z-10 text-center"
+      >
+        <button onClick={onClose} className="absolute top-8 right-8 text-slate-500 hover:text-white transition-colors">
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl">👋</div>
+        <h1 className="text-3xl font-black text-white mb-2 italic uppercase tracking-tighter">{t.IDENTITY_TITLE}</h1>
+        <p className="text-slate-400 font-medium text-sm mb-8">{t.IDENTITY_SUB}</p>
+
+        {errorStatus && (
+          <div className="mb-6 p-4 rounded-2xl bg-hot-pink/10 border border-hot-pink/30 flex gap-3 items-start text-left text-hot-pink text-xs font-bold leading-tight">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" /> {errorStatus}
+          </div>
+        )}
+
+        <form onSubmit={handleCheckMember} className="space-y-6">
+          <div className="space-y-2 text-left">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">{t.WA_LABEL}</label>
+            <div className="relative group">
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-[#0047FF] transition-colors" />
+              <input
+                type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoFocus
+                className="block w-full pl-12 pr-4 py-5 bg-white/5 border border-white/10 rounded-2xl text-white font-bold text-lg outline-none focus:ring-2 focus:ring-[#0047FF]/50 transition-all"
+                placeholder="0812..."
+              />
+            </div>
+          </div>
+          <button
+            type="submit" disabled={isLoading || !phone}
+            className="w-full bg-[#0047FF] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl disabled:opacity-50 transition-all active:scale-95"
+          >
+            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>{t.CEK_MEMBER} <ArrowRight className="w-5 h-5" /></>}
+          </button>
+        </form>
+
+        <button onClick={handleSkip} className="w-full mt-4 text-slate-500 hover:text-white py-4 rounded-2xl font-bold tracking-widest flex items-center justify-center gap-2 transition-all">
+          {t.LEWATI} <SkipForward className="w-4 h-4" />
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+// --- MAIN PAGE: CAMERA SCANNER ---
 export default function CameraScannerPage() {
   const navigate = useNavigate();
   const { language } = useAppStore();
@@ -30,13 +137,17 @@ export default function CameraScannerPage() {
   const [model, setModel] = useState<cocossd.ObjectDetection | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(true);
   const [detectedItems, setDetectedItems] = useState<CartItem[]>([]);
+  const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
 
   const [cvState, setCvState] = useState<{
     label: string | null;
-    status: 'hunting' | 'locked' | 'confirmed';
+    status: 'VISION MODE' | 'LOCKED' | 'CONFIRMED';
     progress: number;
     box: { x: number, y: number, w: number, h: number } | null;
-  }>({ label: null, status: 'hunting', progress: 0, box: null });
+  }>({ label: null, status: 'VISION MODE', progress: 0, box: null });
+
+  const totalQty = detectedItems.reduce((acc, item) => acc + item.qty, 0);
+  const totalPrice = detectedItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
   useEffect(() => {
     async function init() {
@@ -45,14 +156,11 @@ export default function CameraScannerPage() {
           video: { facingMode: 'environment', width: 1280, height: 720 }
         });
         if (videoRef.current) videoRef.current.srcObject = stream;
-
         await tf.ready();
         const loadedModel = await cocossd.load();
         setModel(loadedModel);
         setIsModelLoading(false);
-      } catch (err) {
-        console.error("Gagal inisialisasi:", err);
-      }
+      } catch (err) { console.error(err); }
     }
     init();
   }, []);
@@ -60,14 +168,13 @@ export default function CameraScannerPage() {
   useEffect(() => {
     let requestUpdate: number;
     const runDetection = async () => {
-      if (model && videoRef.current && videoRef.current.readyState === 4 && cvState.status === 'hunting') {
+      if (model && videoRef.current?.readyState === 4 && cvState.status === 'VISION MODE') {
         const predictions = await model.detect(videoRef.current);
         if (predictions.length > 0) {
           const primary = predictions[0];
           let mappedLabel = '';
           if (primary.class === 'cup') mappedLabel = 'pop_mie';
           if (primary.class === 'bottle') mappedLabel = 'le_minerale';
-
           if (mappedLabel && LOCAL_PRICE_MAP[mappedLabel]) {
             handleDetectionLogic(mappedLabel, primary.bbox);
           }
@@ -75,20 +182,12 @@ export default function CameraScannerPage() {
       }
       requestUpdate = requestAnimationFrame(runDetection);
     };
-
     if (!isModelLoading) runDetection();
     return () => cancelAnimationFrame(requestUpdate);
   }, [model, isModelLoading, cvState.status]);
 
   const handleDetectionLogic = (label: string, bbox: number[]) => {
-    if (cvState.status !== 'hunting') return;
-    setCvState({
-      label,
-      status: 'locked',
-      progress: 0,
-      box: { x: bbox[0], y: bbox[1], w: bbox[2], h: bbox[3] }
-    });
-
+    setCvState({ label, status: 'LOCKED', progress: 0, box: { x: bbox[0], y: bbox[1], w: bbox[2], h: bbox[3] } });
     let currentProgress = 0;
     const interval = setInterval(() => {
       currentProgress += 10;
@@ -103,103 +202,104 @@ export default function CameraScannerPage() {
   const confirmDetection = (label: string) => {
     const item = LOCAL_PRICE_MAP[label];
     if (!item) return;
-
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/707/707-preview.mp3');
-    audio.play().catch(() => { });
-
-    setCvState(prev => ({ ...prev, status: 'confirmed' }));
+    new Audio('https://assets.mixkit.co/active_storage/sfx/707/707-preview.mp3').play().catch(() => { });
+    setCvState(prev => ({ ...prev, status: 'CONFIRMED' }));
     setDetectedItems(prev => {
       const exists = prev.find(i => i.label === label);
       if (exists) return prev.map(i => i.label === label ? { ...i, qty: i.qty + 1 } : i);
       return [...prev, { ...item, qty: 1 }];
     });
-
-    setTimeout(() => {
-      setCvState({ label: null, status: 'hunting', progress: 0, box: null });
-    }, 2000);
+    setTimeout(() => setCvState({ label: null, status: 'VISION MODE', progress: 0, box: null }), 2000);
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black font-sans">
-      <video ref={videoRef} autoPlay playsInline muted className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${isModelLoading ? 'opacity-20' : 'opacity-70'}`} />
+    <div className="relative w-screen h-screen overflow-hidden bg-[#030712] font-sans">
+      <video ref={videoRef} autoPlay playsInline muted className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${isModelLoading ? 'opacity-20' : 'opacity-60'}`} />
 
       {isModelLoading && (
-        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/80 text-white text-center p-6">
-          <Loader2 className="w-12 h-12 animate-spin text-[#0047FF] mb-4" />
-          <p className="font-black tracking-widest uppercase animate-pulse">Menyiapkan JagoAI Vision...</p>
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 text-white">
+          <Loader2 className="w-12 h-12 animate-spin text-[#0047FF] mb-6" />
+          <p className="font-black tracking-[0.4em] uppercase text-xs italic">Initializing JagoAI Engine...</p>
         </div>
       )}
 
-      {/* ROI Guide */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-        <div className="w-[350px] h-[350px] border-2 border-dashed border-white/20 rounded-[40px] flex items-center justify-center relative">
-          <div className="text-white/20 uppercase text-[10px] font-black tracking-[0.3em] absolute -bottom-10">Posisikan Barang di Tengah</div>
-          <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/30 rounded-tl-3xl" />
-          <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/30 rounded-tr-3xl" />
-          <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/30 rounded-bl-3xl" />
-          <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white/30 rounded-br-3xl" />
-        </div>
-      </div>
+      {!isModelLoading && cvState.status === 'VISION MODE' && (
+        <motion.div animate={{ top: ['0%', '100%', '0%'] }} transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+          className="absolute left-0 w-full h-[2px] bg-[#0047FF] shadow-[0_0_20px_rgba(0,71,255,0.8)] z-10 pointer-events-none" />
+      )}
 
-      {/* Bounding Box */}
       <AnimatePresence>
         {cvState.box && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1, borderColor: cvState.status === 'confirmed' ? '#22c55e' : '#0047FF' }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="absolute z-50 border-[4px] rounded-[30px] pointer-events-none shadow-[0_0_40px_rgba(0,71,255,0.4)]"
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1, borderColor: cvState.status === 'CONFIRMED' ? '#22c55e' : '#0047FF' }} exit={{ opacity: 0, scale: 1.1 }}
+            className="absolute z-50 border-[4px] rounded-[30px] pointer-events-none shadow-[0_0_50px_rgba(0,71,255,0.3)]"
             style={{ left: cvState.box.x, top: cvState.box.y, width: cvState.box.w, height: cvState.box.h }}
           >
-            <div className={`absolute -top-12 left-0 px-4 py-2 rounded-xl text-white text-sm font-black flex items-center gap-2 ${cvState.status === 'confirmed' ? 'bg-green-500' : 'bg-[#0047FF]'}`}>
-              {cvState.status === 'confirmed' ? <ShieldCheck className="w-4 h-4" /> : <Scan className="w-4 h-4 animate-spin" />}
-              {cvState.label?.toUpperCase()}
+            <div className={`absolute -top-12 left-0 px-4 py-2 rounded-xl text-white text-xs font-black flex items-center gap-2 ${cvState.status === 'CONFIRMED' ? 'bg-green-500' : 'bg-[#0047FF]'}`}>
+              {cvState.status === 'CONFIRMED' ? <ShieldCheck className="w-4 h-4" /> : <Scan className="w-4 h-4 animate-spin" />}
+              {cvState.label?.replace('_', ' ').toUpperCase()}
             </div>
-            {cvState.status === 'locked' && (
-              <div className="absolute inset-0 rounded-[26px] overflow-hidden">
-                <motion.div className="absolute bottom-0 left-0 right-0 bg-blue-500/30" animate={{ height: `${cvState.progress}%` }} />
-              </div>
-            )}
+            {cvState.status === 'LOCKED' && <div className="absolute inset-0 rounded-[26px] overflow-hidden"><motion.div className="absolute bottom-0 left-0 right-0 bg-blue-500/40" animate={{ height: `${cvState.progress}%` }} /></div>}
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="absolute top-0 inset-x-0 p-8 z-20">
-        <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-[32px] px-8 py-5 text-white">
-          <div className="font-black text-2xl italic">JagoAI <span className="text-[#0047FF]">VISION</span></div>
-          <div className="flex items-center gap-4 bg-white/5 px-5 py-2 rounded-full border border-white/5 text-[10px] font-black uppercase">
-            <div className={`w-3 h-3 rounded-full ${cvState.status !== 'hunting' ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
-            {cvState.status} mode
+        <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
+          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">JagoAI <span className="text-[#0047FF]">VISION</span></div>
+          <div className="flex items-center gap-4 bg-[#0047FF]/10 px-6 py-2.5 rounded-full border border-[#0047FF]/30 text-[10px] font-black uppercase tracking-widest text-[#0047FF]">
+            <div className={`w-2.5 h-2.5 rounded-full ${cvState.status !== 'VISION MODE' ? 'bg-red-500 animate-pulse' : 'bg-[#0047FF]'}`} />
+            {cvState.status}
           </div>
         </div>
       </div>
 
-      <div className="absolute left-8 bottom-8 z-20 w-80 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[40px] p-8 text-white">
-        <div className="flex items-center gap-3 mb-6 opacity-50 text-xs font-black uppercase tracking-widest">
-          <ShoppingBag className="w-5 h-5" /> Keranjang ({detectedItems.length})
+      <div className="absolute left-8 bottom-8 z-20 w-85 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-[45px] flex flex-col max-h-[480px] text-white shadow-2xl overflow-hidden">
+        <div className="p-10 pb-5">
+          <div className="flex items-center gap-3 opacity-50 text-[10px] font-black uppercase tracking-[0.3em] mb-4">
+            <ShoppingBag className="w-4 h-4" /> Keranjang ({totalQty})
+          </div>
+          <div className="h-[1px] bg-white/5 w-full" />
         </div>
-        <div className="space-y-4 max-h-40 overflow-y-auto custom-scrollbar">
-          {detectedItems.map((item, idx) => (
-            <div key={idx} className="flex justify-between text-sm">
-              <span className="font-bold">{item.name}</span>
-              <span className="text-[#0047FF] font-black">x{item.qty}</span>
-            </div>
-          ))}
+
+        <div className="px-10 flex-1 overflow-y-auto custom-scrollbar space-y-6 py-2">
+          {detectedItems.length === 0 ? (
+            <div className="text-xs text-white/20 italic font-bold">Belum ada barang terdeteksi...</div>
+          ) : (
+            detectedItems.map((item, idx) => (
+              <motion.div initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }} key={idx} className="flex justify-between items-center group">
+                <div className="flex flex-col text-left">
+                  <span className="text-sm font-black tracking-tight group-hover:text-[#0047FF] transition-colors">{item.name}</span>
+                </div>
+                <div className="text-[#0047FF] font-black text-lg bg-white/5 px-3 py-1 rounded-lg">x{item.qty}</div>
+              </motion.div>
+            ))
+          )}
+        </div>
+
+        <div className="p-10 pt-5">
+          <div className="h-[1px] bg-white/5 w-full mb-8" />
+          <div className="flex justify-between items-end">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Total Belanja</span>
+            <span className="text-4xl font-black text-white italic tracking-tighter leading-none">Rp{totalPrice.toLocaleString('id-ID')}</span>
+          </div>
         </div>
       </div>
 
-      <button
-        disabled={detectedItems.length === 0}
-        onClick={() => navigate('/identity-check', { state: { items: detectedItems } })}
-        className={`absolute right-8 bottom-8 z-[70] px-12 py-8 rounded-[40px] font-black text-2xl uppercase flex items-center gap-5 transition-all ${detectedItems.length > 0 ? 'bg-[#0047FF] text-white shadow-lg' : 'bg-white/10 text-white/20'
-          }`}
+      <button disabled={detectedItems.length === 0} onClick={() => setIsIdentityModalOpen(true)}
+        className={`absolute right-8 bottom-8 z-[60] px-16 py-10 rounded-[50px] font-black text-3xl uppercase flex items-center gap-6 transition-all transform active:scale-95 ${detectedItems.length > 0 ? 'bg-[#0047FF] text-white shadow-[0_20px_60px_rgba(0,71,255,0.5)]' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}
       >
-        SELESAI <ChevronRight />
+        LANJUT <ChevronRight className="w-8 h-8" />
       </button>
 
+      <AnimatePresence>
+        {isIdentityModalOpen && <IdentityCheckModal onClose={() => setIsIdentityModalOpen(false)} cartItems={detectedItems} />}
+      </AnimatePresence>
+
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 2px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 71, 255, 0.3); border-radius: 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 71, 255, 0.6); }
       `}</style>
     </div>
   );
