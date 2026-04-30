@@ -69,36 +69,36 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-deep-dark flex items-center justify-center p-4">
+    <div className="min-h-screen bg-mesh flex items-center justify-center p-4">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }} 
         animate={{ opacity: 1, scale: 1 }} 
         transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="w-full max-w-md bg-white/5 backdrop-blur-[20px] border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden"
+        className="w-full max-w-md glass-card p-8 rounded-3xl relative overflow-hidden"
       >
-        {/* Neon accent glows */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-neon-cobalt opacity-20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-hot-pink opacity-20 rounded-full blur-3xl pointer-events-none" />
+        {/* Brand accent glows */}
+        <div className="absolute -top-24 -left-24 w-48 h-48 bg-brand-primary opacity-10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-brand-accent opacity-10 rounded-full blur-3xl pointer-events-none" />
         
         <div className="relative z-10 text-center mb-8">
-          <h1 className="text-3xl font-black text-white mb-2">{t.TITLE}</h1>
-          <p className="text-slate-400">{t.SUBTITLE}</p>
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-heading tracking-tight">{t.TITLE}</h1>
+          <p className="text-slate-600 dark:text-slate-400 font-medium">{t.SUBTITLE}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+            <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-1">
               {t.PHONE_LABEL}
             </label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-slate-400 group-focus-within:text-neon-cobalt transition-colors" />
+                <Phone className="h-5 w-5 text-slate-400 group-focus-within:text-brand-primary transition-colors" />
               </div>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="block w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold focus:ring-2 focus:ring-neon-cobalt/50 focus:border-neon-cobalt outline-none transition-all"
+                className="block w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary outline-none transition-all placeholder:text-slate-500"
                 placeholder={t.PHONE_PLACEHOLDER}
               />
             </div>
@@ -107,7 +107,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-neon-cobalt bg-opacity-90 hover:bg-opacity-100 text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,71,255,0.4)] transition-all active:scale-[0.98] disabled:opacity-50"
+            className="w-full bg-brand-primary hover:bg-brand-primary/90 text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
           >
             {isLoading ? (
               <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -122,14 +122,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
         <div className="relative z-10 mt-8">
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-transparent text-slate-500 font-semibold">{t.OR}</span>
+            <span className="px-2 bg-transparent text-slate-500 font-bold uppercase tracking-widest text-[10px]">{t.OR}</span>
           </div>
           <button
             onClick={handleGuest}
             type="button"
-            className="mt-4 w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            className="mt-4 w-full bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
           >
-            <UserCircle className="w-5 h-5 text-slate-300" />
+            <UserCircle className="w-5 h-5 text-slate-500" />
             {t.GUEST_BTN}
           </button>
         </div>

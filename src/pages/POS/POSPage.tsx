@@ -201,7 +201,7 @@ export default function POSPage({ user }: POSPageProps) {
           { 
             time: new Date().toLocaleTimeString('en-GB', { hour12: false }), 
             msg: `Detected: ${product.name} | PIC: ${user?.name || 'Kasir'}`, 
-            color: 'text-blue-400' 
+            color: 'text-brand-primary' 
           },
           ...prev.slice(0, 4)
         ]);
@@ -253,7 +253,7 @@ export default function POSPage({ user }: POSPageProps) {
 
         // Scanline effect over entire safe area
         scanlineY = (scanlineY + 2) % canvas.height;
-        ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
+        ctx.fillStyle = 'rgba(37, 99, 235, 0.1)';
         ctx.fillRect(0, scanlineY, canvas.width, 2);
 
         let activeTargetLabel: string | null = null;
@@ -313,7 +313,7 @@ export default function POSPage({ user }: POSPageProps) {
           }
 
           // Drawing matched box
-          const themeColor = showGreenFlash && (dwellTimerRef.current === null) ? '#10b981' : '#00f2ff';
+          const themeColor = showGreenFlash && (dwellTimerRef.current === null) ? '#10b981' : '#2563eb';
           ctx.strokeStyle = themeColor;
           ctx.lineWidth = 3;
           ctx.shadowBlur = 10;
@@ -346,8 +346,7 @@ export default function POSPage({ user }: POSPageProps) {
 
           // Progress Bar for Scanning
           if (dwellTimerRef.current && dwellTimerRef.current.label === heuristicLabel) {
-             const progress = Math.min(1, (now - dwellTimerRef.current.startTime) / 1200);
-             ctx.fillStyle = 'rgba(0, 242, 255, 0.3)';
+             ctx.fillStyle = 'rgba(37, 99, 235, 0.2)';
              ctx.fillRect(x, y + h + 5, w, 6);
              ctx.fillStyle = themeColor;
              ctx.fillRect(x, y + h + 5, w * progress, 6);
@@ -466,8 +465,8 @@ export default function POSPage({ user }: POSPageProps) {
 
   return (
     <div className={cn(
-      "h-screen flex flex-col font-sans overflow-hidden transition-colors duration-300",
-      "bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100",
+      "h-screen flex flex-col font-sans overflow-hidden transition-colors duration-500 bg-mesh",
+      "bg-surface-light text-slate-900 dark:bg-surface-dark dark:text-slate-100",
       isDark ? "dark" : ""
     )}>
       {/* Header (Internal POS Header) */}
@@ -579,9 +578,9 @@ export default function POSPage({ user }: POSPageProps) {
             isDark ? "bg-slate-800/50 border-slate-700" : "bg-slate-50/50 border-slate-100"
           )}>
             <div className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-blue-500" />
+              <ShoppingCart className="w-5 h-5 text-brand-primary" />
               <h2 className={cn("font-bold uppercase tracking-wider text-sm", isDark ? "text-slate-300" : "text-slate-700")}>Active Shopping Cart</h2>
-              <span className="bg-blue-500/10 text-blue-500 text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-brand-primary/10 text-brand-primary text-xs font-bold px-2 py-0.5 rounded-full">
                 {cart.length} Items
               </span>
             </div>
@@ -597,10 +596,12 @@ export default function POSPage({ user }: POSPageProps) {
                 }
               }}
               className={cn(
-                "pl-9 pr-4 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-64 transition-colors duration-300",
+              className={cn(
+                "pl-9 pr-4 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 w-64 transition-all duration-300",
                 isDark 
-                  ? "bg-slate-900 border-slate-700 text-slate-300 placeholder:text-slate-600" 
-                  : "bg-white border-slate-200 text-slate-700 placeholder:text-slate-400"
+                  ? "bg-slate-900 border-slate-700 text-slate-300 placeholder:text-slate-600 focus:border-brand-primary" 
+                  : "bg-white border-slate-200 text-slate-700 placeholder:text-slate-400 focus:border-brand-primary"
+              )}
               )}
             />
           </div>
@@ -714,9 +715,8 @@ export default function POSPage({ user }: POSPageProps) {
                           {item.stock}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-4">
-                          <span className="font-mono font-bold text-blue-500">{formatIDR(item.price * item.quantity)}</span>
+                          <span className="font-mono font-bold text-brand-primary">{formatIDR(item.price * item.quantity)}</span>
                           <button 
                             onClick={() => removeFromCart(item.id)}
                             className="text-slate-400 hover:text-red-500 transition-colors"
@@ -739,12 +739,12 @@ export default function POSPage({ user }: POSPageProps) {
           )}>
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Grand Total</span>
-              <span className={cn("text-4xl font-mono font-black", isDark ? "text-white" : "text-blue-900")}>{formatIDR(totalAmount)}</span>
+              <span className={cn("text-4xl font-mono font-black", isDark ? "text-white" : "text-brand-primary")}>{formatIDR(totalAmount)}</span>
             </div>
             <button 
               onClick={handleCheckout}
               disabled={cart.length === 0}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white px-12 py-5 rounded-2xl font-bold flex items-center gap-3 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+              className="bg-brand-primary hover:bg-brand-primary/90 disabled:bg-slate-700 text-white px-12 py-5 rounded-2xl font-bold flex items-center gap-3 shadow-lg shadow-brand-primary/20 active:scale-95 transition-all"
             >
               PROCEED TO CHECKOUT
               <ChevronRight className="w-5 h-5" />
@@ -786,8 +786,8 @@ export default function POSPage({ user }: POSPageProps) {
             {!modelLoaded && (
               <div className="absolute inset-0 z-40 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent flex items-center justify-center rounded-full animate-spin" />
-                  <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">Initializing AI Engine...</span>
+                  <div className="w-8 h-8 border-4 border-brand-primary border-t-transparent flex items-center justify-center rounded-full animate-spin" />
+                  <span className="text-xs font-bold text-brand-primary uppercase tracking-widest">Initializing AI Engine...</span>
                 </div>
               </div>
             )}

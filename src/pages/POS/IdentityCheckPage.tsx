@@ -48,22 +48,22 @@ export default function IdentityCheckPage() {
   };
 
   return (
-    <div className="min-h-screen bg-deep-dark flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-surface-light dark:bg-surface-dark bg-mesh flex items-center justify-center p-4 relative overflow-hidden text-slate-900 dark:text-white">
       {/* Background aesthetics */}
-      <div className="absolute top-1/4 -right-24 w-96 h-96 bg-neon-cobalt opacity-20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/4 -left-24 w-96 h-96 bg-hot-pink opacity-10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/4 -right-24 w-96 h-96 bg-neon-blue opacity-10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 -left-24 w-96 h-96 bg-accent-pink opacity-5 rounded-full blur-[100px] pointer-events-none" />
 
       <motion.div 
         initial={{ opacity: 0, y: 30 }} 
         animate={{ opacity: 1, y: 0 }} 
-        className="w-full max-w-md bg-[#020617]/80 backdrop-blur-[20px] border border-white/10 p-8 rounded-[2rem] shadow-2xl relative z-10"
+        className="w-full max-w-md glass-card p-8 rounded-[2rem] shadow-2xl relative z-10"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-900 dark:text-white">
             <span className="text-3xl">👋</span>
           </div>
-          <h1 className="text-3xl font-black text-white mb-2">{t.IDENTITY_TITLE}</h1>
-          <p className="text-slate-400 font-medium">{t.IDENTITY_SUB}</p>
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2">{t.IDENTITY_TITLE}</h1>
+          <p className="text-slate-600 dark:text-slate-400 font-medium">{t.IDENTITY_SUB}</p>
         </div>
 
         {errorStatus && (
@@ -84,14 +84,14 @@ export default function IdentityCheckPage() {
             </label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-slate-400 group-focus-within:text-neon-cobalt transition-colors" />
+                <Phone className="h-5 w-5 text-slate-400 group-focus-within:text-neon-blue transition-colors" />
               </div>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 autoFocus
-                className="block w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold text-lg tracking-wider focus:ring-2 focus:ring-neon-cobalt/50 focus:border-neon-cobalt outline-none transition-all placeholder:text-slate-600"
+                className="block w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white font-bold text-lg tracking-wider focus:ring-2 focus:ring-neon-blue/50 focus:border-neon-blue outline-none transition-all placeholder:text-slate-500"
                 placeholder={t.WA_PLACEHOLDER}
               />
             </div>
@@ -100,7 +100,7 @@ export default function IdentityCheckPage() {
           <button
             type="submit"
             disabled={isLoading || !phone}
-            className="w-full bg-neon-cobalt hover:bg-neon-cobalt/90 text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,71,255,0.4)] transition-all active:scale-[0.98] disabled:opacity-50"
+            className="w-full bg-neon-blue hover:bg-neon-blue/90 text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_10px_30px_rgba(0,102,255,0.3)] transition-all active:scale-[0.98] disabled:opacity-50"
           >
             {isLoading ? (
               <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />

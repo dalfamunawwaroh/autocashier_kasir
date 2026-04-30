@@ -7,7 +7,7 @@ import './index.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* @ts-ignore - ThemeProvider types mismatch in some environments */}
-    <ThemeProvider attribute="class" defaultTheme="light">
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange={false}>
       <App />
     </ThemeProvider>
   </StrictMode>,
