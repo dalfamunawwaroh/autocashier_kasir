@@ -10,54 +10,79 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { language } = useAppStore();
+  const { language, user } = useAppStore();
+  
+  React.useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        navigate('/dashboard');
+      } else {
+        navigate('/scan');
+      }
+    }
+  }, [user, navigate]);
+
   const t = language === 'id' ? {
-    TITLE: 'Identifikasi Member',
-    SUBTITLE: 'Masukkan Nomor WhatsApp Anda untuk mulai transaksi.',
-    PHONE_LABEL: 'Nomor WhatsApp',
-    PHONE_PLACEHOLDER: 'Contoh: 081234567890',
+    TITLE: 'Identifikasi Sistem',
+    SUBTITLE: 'Masukkan kredensial Admin atau Nomor WA.',
+    PHONE_LABEL: 'Username / Nomor WA',
+    PHONE_PLACEHOLDER: 'Contoh: superadmin / 0812...',
+    PASSWORD_LABEL: 'Password (Khusus Admin)',
+    PASSWORD_PLACEHOLDER: 'Masukkan password',
     LOGIN_BTN: 'Masuk Sekarang',
     OR: 'atau',
     GUEST_BTN: 'Lanjut Sebagai Tamu',
-    ERR_EMPTY: 'Nomor WA tidak boleh kosong'
+    ERR_EMPTY: 'Username / Nomor WA tidak boleh kosong'
   } : {
-    TITLE: 'Member Identification',
-    SUBTITLE: 'Enter your WhatsApp number to start transaction.',
-    PHONE_LABEL: 'WhatsApp Number',
-    PHONE_PLACEHOLDER: 'Example: 081234567890',
+    TITLE: 'System Identification',
+    SUBTITLE: 'Enter Admin credentials or WA Number.',
+    PHONE_LABEL: 'Username / WA Number',
+    PHONE_PLACEHOLDER: 'Example: superadmin / 0812...',
+    PASSWORD_LABEL: 'Password (Admin Only)',
+    PASSWORD_PLACEHOLDER: 'Enter password',
     LOGIN_BTN: 'Login Now',
     OR: 'or',
     GUEST_BTN: 'Continue as Guest',
-    ERR_EMPTY: 'WA Number cannot be empty'
+    ERR_EMPTY: 'Username / WA Number cannot be empty'
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone) {
+    const cleanUsername = username.trim();
+    if (!cleanUsername) {
       toast.error(t.ERR_EMPTY);
       return;
     }
 
     setIsLoading(true);
     try {
-      // Simulate API call for phone login
-      // Actually here we would call an endpoint to see if they are a valid member
-      // For now, let's treat everyone as a generic 'kasir' / member and go to /scan
-      // Admin dashboard users might use a different route, or if phone == admin phone
-      
-      const role = phone === 'admin' ? 'admin' : 'kasir';
-      onLogin({ name: phone, role, phone });
-      
-      if (role === 'admin') {
-        navigate('/dashboard');
+      if (password) {
+        // Authenticate via database
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: cleanUsername, password })
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.status === 'success') {
+          // Pass the authenticated user data to the store
+          const role = data.data.user.role || 'admin';
+          onLogin({ name: data.data.user.full_name || cleanUsername, role, phone: cleanUsername });
+        } else {
+          toast.error(data.error || 'Login gagal, periksa username/password');
+        }
       } else {
-        navigate('/scan');
+        // Fallback Kasir
+        const role = (cleanUsername === 'admin' || cleanUsername === 'admin_utama' || cleanUsername === 'superadmin') ? 'admin' : 'kasir';
+        onLogin({ name: cleanUsername, role, phone: cleanUsername });
       }
     } catch (err) {
-      toast.error('Connection failed');
+      toast.error('Koneksi ke server gagal');
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +90,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
   const handleGuest = () => {
     onLogin({ name: 'Guest', role: 'kasir' });
-    navigate('/scan');
   };
 
   return (
@@ -86,21 +110,42 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-1">
-              {t.PHONE_LABEL}
-            </label>
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Phone className="h-5 w-5 text-slate-400 group-focus-within:text-brand-primary transition-colors" />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-1">
+                {t.PHONE_LABEL}
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <UserCircle className="h-5 w-5 text-slate-400 group-focus-within:text-brand-primary transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="block w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary outline-none transition-all placeholder:text-slate-500"
+                  placeholder={t.PHONE_PLACEHOLDER}
+                />
               </div>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="block w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary outline-none transition-all placeholder:text-slate-500"
-                placeholder={t.PHONE_PLACEHOLDER}
-              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-1">
+                {t.PASSWORD_LABEL}
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Phone className="h-5 w-5 text-slate-400 group-focus-within:text-brand-primary transition-colors opacity-0" />
+                  <div className="absolute left-4">🔒</div>
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary outline-none transition-all placeholder:text-slate-500"
+                  placeholder={t.PASSWORD_PLACEHOLDER}
+                />
+              </div>
             </div>
           </div>
 

@@ -27,12 +27,6 @@ export interface CartItem {
   qty: number;
 }
 
-const LOCAL_PRICE_MAP: Record<string, any> = {
-  'pop_mie': { id: 1, label: 'pop_mie', name: 'Pop Mie Rasa Ayam', price: 6500 },
-  'le_minerale': { id: 3, label: 'le_minerale', name: 'Le Minerale 600ml', price: 4000 },
-  'aqua_600ml': { id: 'prod_002', label: 'aqua_600ml', name: 'Aqua 600ml', price: 3500 }
-};
-
 // --- COMPONENT: IDENTITY CHECK MODAL ---
 interface IdentityCheckModalProps {
   onClose: () => void;
@@ -139,12 +133,33 @@ export default function CameraScannerPage() {
   const [detectedItems, setDetectedItems] = useState<CartItem[]>([]);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
 
+  const labelCache = useRef<Record<string, any>>({});
+
   const [cvState, setCvState] = useState<{
     label: string | null;
-    status: 'VISION MODE' | 'LOCKED' | 'CONFIRMED';
+    status: 'VISION MODE' | 'LOCKED' | 'CONFIRMED' | 'UNRECOGNIZED';
     progress: number;
     box: { x: number, y: number, w: number, h: number } | null;
   }>({ label: null, status: 'VISION MODE', progress: 0, box: null });
+
+  const getMappedBox = (bbox: number[]) => {
+    if (!videoRef.current) return { x: bbox[0], y: bbox[1], w: bbox[2], h: bbox[3] };
+    const { videoWidth, videoHeight, clientWidth, clientHeight } = videoRef.current;
+    
+    const scale = Math.max(clientWidth / videoWidth, clientHeight / videoHeight);
+    const renderedWidth = videoWidth * scale;
+    const renderedHeight = videoHeight * scale;
+    
+    const offsetX = (clientWidth - renderedWidth) / 2;
+    const offsetY = (clientHeight - renderedHeight) / 2;
+    
+    return {
+      x: bbox[0] * scale + offsetX,
+      y: bbox[1] * scale + offsetY,
+      w: bbox[2] * scale,
+      h: bbox[3] * scale
+    };
+  };
 
   const totalQty = detectedItems.reduce((acc, item) => acc + item.qty, 0);
   const totalPrice = detectedItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
@@ -169,14 +184,46 @@ export default function CameraScannerPage() {
     let requestUpdate: number;
     const runDetection = async () => {
       if (model && videoRef.current?.readyState === 4 && cvState.status === 'VISION MODE') {
-        const predictions = await model.detect(videoRef.current);
+        const rawPredictions = await model.detect(videoRef.current);
+        const predictions = rawPredictions.filter(pred => pred.class !== 'person');
+        
         if (predictions.length > 0) {
-          const primary = predictions[0];
-          let mappedLabel = '';
-          if (primary.class === 'cup') mappedLabel = 'pop_mie';
-          if (primary.class === 'bottle') mappedLabel = 'le_minerale';
-          if (mappedLabel && LOCAL_PRICE_MAP[mappedLabel]) {
-            handleDetectionLogic(mappedLabel, primary.bbox);
+          let matchedPrediction = null;
+          let bestUnrecognized = null;
+
+          for (const pred of predictions) {
+            const label = pred.class;
+            
+            // Panggil API pencarian real-time jika belum di-cache
+            if (labelCache.current[label] === undefined) {
+              labelCache.current[label] = 'pending';
+              fetch(`/api/products/search?label=${label}`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data.success && data.product) {
+                    labelCache.current[label] = data.product;
+                  } else {
+                    labelCache.current[label] = null;
+                  }
+                })
+                .catch(() => {
+                  labelCache.current[label] = null;
+                });
+            }
+
+            const cachedProduct = labelCache.current[label];
+            if (cachedProduct && cachedProduct !== 'pending') {
+              matchedPrediction = pred;
+              break; // Langsung prioritaskan produk yang ada di database
+            } else if (cachedProduct === null && pred.score > 0.5 && !bestUnrecognized) {
+              bestUnrecognized = pred; // Simpan objek tak dikenal dengan score tertinggi
+            }
+          }
+
+          if (matchedPrediction) {
+            handleDetectionLogic(matchedPrediction.class, matchedPrediction.bbox);
+          } else if (bestUnrecognized) {
+            handleUnrecognizedLogic(bestUnrecognized.class, bestUnrecognized.bbox);
           }
         }
       }
@@ -187,7 +234,8 @@ export default function CameraScannerPage() {
   }, [model, isModelLoading, cvState.status]);
 
   const handleDetectionLogic = (label: string, bbox: number[]) => {
-    setCvState({ label, status: 'LOCKED', progress: 0, box: { x: bbox[0], y: bbox[1], w: bbox[2], h: bbox[3] } });
+    const mappedBox = getMappedBox(bbox);
+    setCvState({ label, status: 'LOCKED', progress: 0, box: mappedBox });
     let currentProgress = 0;
     const interval = setInterval(() => {
       currentProgress += 10;
@@ -199,15 +247,29 @@ export default function CameraScannerPage() {
     }, 100);
   };
 
+  const handleUnrecognizedLogic = (label: string, bbox: number[]) => {
+    const mappedBox = getMappedBox(bbox);
+    setCvState({ label, status: 'UNRECOGNIZED', progress: 0, box: mappedBox });
+    setTimeout(() => {
+      setCvState(prev => prev.status === 'UNRECOGNIZED' ? { label: null, status: 'VISION MODE', progress: 0, box: null } : prev);
+    }, 1500);
+  };
+
   const confirmDetection = (label: string) => {
-    const item = LOCAL_PRICE_MAP[label];
-    if (!item) return;
+    const product = labelCache.current[label];
+    if (!product || product === 'pending') return;
     new Audio('https://assets.mixkit.co/active_storage/sfx/707/707-preview.mp3').play().catch(() => { });
     setCvState(prev => ({ ...prev, status: 'CONFIRMED' }));
     setDetectedItems(prev => {
-      const exists = prev.find(i => i.label === label);
-      if (exists) return prev.map(i => i.label === label ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...item, qty: 1 }];
+      const exists = prev.find(i => i.id === product.id);
+      if (exists) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { 
+        id: product.id, 
+        label: product.ai_label || label, 
+        name: product.name, 
+        price: Number(product.price), 
+        qty: 1 
+      }];
     });
     setTimeout(() => setCvState({ label: null, status: 'VISION MODE', progress: 0, box: null }), 2000);
   };
@@ -230,13 +292,13 @@ export default function CameraScannerPage() {
 
       <AnimatePresence>
         {cvState.box && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1, borderColor: cvState.status === 'CONFIRMED' ? '#22c55e' : '#0066FF' }} exit={{ opacity: 0, scale: 1.1 }}
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1, borderColor: cvState.status === 'CONFIRMED' ? '#22c55e' : cvState.status === 'UNRECOGNIZED' ? '#ef4444' : '#0066FF' }} exit={{ opacity: 0, scale: 1.1 }}
             className="absolute z-50 border-[4px] rounded-[30px] pointer-events-none shadow-[0_0_50px_rgba(0,102,255,0.3)]"
             style={{ left: cvState.box.x, top: cvState.box.y, width: cvState.box.w, height: cvState.box.h }}
           >
-            <div className={`absolute -top-12 left-0 px-4 py-2 rounded-xl text-white text-xs font-black flex items-center gap-2 ${cvState.status === 'CONFIRMED' ? 'bg-green-500' : 'bg-neon-blue'}`}>
-              {cvState.status === 'CONFIRMED' ? <ShieldCheck className="w-4 h-4" /> : <Scan className="w-4 h-4 animate-spin" />}
-              {cvState.label?.replace('_', ' ').toUpperCase()}
+            <div className={`absolute -top-12 left-0 px-4 py-2 rounded-xl text-white text-xs font-black flex items-center gap-2 ${cvState.status === 'CONFIRMED' ? 'bg-green-500' : cvState.status === 'UNRECOGNIZED' ? 'bg-red-500' : 'bg-neon-blue'}`}>
+              {cvState.status === 'CONFIRMED' ? <ShieldCheck className="w-4 h-4" /> : cvState.status === 'UNRECOGNIZED' ? <AlertCircle className="w-4 h-4" /> : <Scan className="w-4 h-4 animate-spin" />}
+              {cvState.status === 'UNRECOGNIZED' ? 'TIDAK DIKENALI' : cvState.label?.replace('_', ' ').toUpperCase()}
             </div>
             {cvState.status === 'LOCKED' && <div className="absolute inset-0 rounded-[26px] overflow-hidden"><motion.div className="absolute bottom-0 left-0 right-0 bg-blue-500/40" animate={{ height: `${cvState.progress}%` }} /></div>}
           </motion.div>

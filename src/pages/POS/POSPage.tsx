@@ -127,8 +127,8 @@ export default function POSPage({ user }: POSPageProps) {
     try {
       const res = await fetch('/api/products');
       const data = await res.json();
-      if (data.success) {
-        setAllProducts(data.products);
+      if (data.status === 'success') {
+        setAllProducts(data.data || []);
       }
     } catch (err) {
       console.error("Sync error:", err);
@@ -141,8 +141,8 @@ export default function POSPage({ user }: POSPageProps) {
       try {
         const res = await fetch('/api/store-settings');
         const data = await res.json();
-        if (data.success) {
-          setStoreName(data.settings.store_name);
+        if (data.status === 'success') {
+          setStoreName(data.data.store_name);
           setIsSyncing(true);
         }
       } catch (err) {
@@ -184,8 +184,8 @@ export default function POSPage({ user }: POSPageProps) {
       const response = await fetch(`/api/products/search?label=${label}`);
       const data = await response.json();
 
-      if (data.success) {
-        const product = data.product;
+      if (data.status === 'success') {
+        const product = data.data;
         
         // Visual Feedback: Green Flash
         setShowGreenFlash(true);
@@ -346,6 +346,7 @@ export default function POSPage({ user }: POSPageProps) {
 
           // Progress Bar for Scanning
           if (dwellTimerRef.current && dwellTimerRef.current.label === heuristicLabel) {
+             const progress = Math.min(1, (now - dwellTimerRef.current.startTime) / 1200);
              ctx.fillStyle = 'rgba(37, 99, 235, 0.2)';
              ctx.fillRect(x, y + h + 5, w, 6);
              ctx.fillStyle = themeColor;
@@ -427,7 +428,7 @@ export default function POSPage({ user }: POSPageProps) {
       });
 
       const data = await response.json();
-      if (data.success) {
+      if (data.status === 'success') {
         toast.success("Transaction Successful!", {
           description: `Invoice ${invoiceNumber} saved.`,
         });
@@ -596,12 +597,10 @@ export default function POSPage({ user }: POSPageProps) {
                 }
               }}
               className={cn(
-              className={cn(
                 "pl-9 pr-4 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 w-64 transition-all duration-300",
                 isDark 
                   ? "bg-slate-900 border-slate-700 text-slate-300 placeholder:text-slate-600 focus:border-brand-primary" 
                   : "bg-white border-slate-200 text-slate-700 placeholder:text-slate-400 focus:border-brand-primary"
-              )}
               )}
             />
           </div>
@@ -715,6 +714,7 @@ export default function POSPage({ user }: POSPageProps) {
                           {item.stock}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-4">
                           <span className="font-mono font-bold text-brand-primary">{formatIDR(item.price * item.quantity)}</span>
                           <button 
