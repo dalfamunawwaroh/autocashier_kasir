@@ -67,7 +67,7 @@ export default function ReceiptVerificationPage() {
   }, [step, navigate]);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#020617] flex items-center justify-center">
+    <div className="relative w-screen h-screen overflow-hidden bg-slate-900 flex items-center justify-center">
       {/* Background Video */}
       <video
         ref={videoRef}
@@ -88,8 +88,8 @@ export default function ReceiptVerificationPage() {
       {/* Top Bar Status */}
       <div className="absolute top-0 inset-x-0 p-6 z-20">
         <div className="max-w-7xl mx-auto flex justify-center items-center">
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-8 py-3">
-            <h2 className="text-white font-black text-xl tracking-widest uppercase">
+          <div className="bg-white/80 dark:bg-slate-900/10 backdrop-blur-md border border-slate-200 dark:border-white/20 rounded-full px-8 py-3">
+            <h2 className="text-slate-900 dark:text-white font-black text-xl tracking-widest uppercase">
               {step === 'scan' && (t.RECEIPT_SCAN || 'SCAN STRUK')}
               {step === 'verifying' && (t.VERIFYING || 'VERIFIKASI...')}
               {step === 'success' && (t.TRANS_SUCCESS || 'TRANSAKSI BERHASIL!')}
@@ -105,15 +105,15 @@ export default function ReceiptVerificationPage() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.2, filter: 'blur(10px)' }}
-            className="relative z-10 w-80 h-80 border-4 border-dashed border-white/50 rounded-[3rem] flex flex-col items-center justify-center p-8 bg-black/20 backdrop-blur-sm"
+            className="relative z-10 w-80 h-80 border-4 border-dashed border-slate-400 dark:border-white/50 rounded-[3rem] flex flex-col items-center justify-center p-8 bg-white/20 dark:bg-black/20 backdrop-blur-sm"
           >
             <motion.div
               animate={{ y: [-150, 150, -150] }}
               transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-              className="absolute left-0 right-0 h-1 bg-[#0047FF] shadow-[0_0_20px_rgba(0,71,255,1)]"
+              className="absolute left-0 right-0 h-1 bg-brand-primary shadow-[0_0_20px_rgba(37,99,235,1)]"
             />
-            <ScanFace className="w-16 h-16 text-white/50 mb-4 animate-pulse" />
-            <p className="text-center text-white/80 font-bold uppercase tracking-widest">Arahkan struk/HP</p>
+            <ScanFace className="w-16 h-16 text-slate-600 dark:text-white/50 mb-4 animate-pulse" />
+            <p className="text-center text-slate-800 dark:text-white/80 font-bold uppercase tracking-widest">Arahkan struk/HP</p>
           </motion.div>
         )}
 
@@ -123,15 +123,15 @@ export default function ReceiptVerificationPage() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            className="relative z-10 flex flex-col items-center justify-center bg-white/10 backdrop-blur-2xl p-12 rounded-[3rem] border border-white/20 shadow-2xl"
+            className="relative z-10 flex flex-col items-center justify-center bg-white/80 dark:bg-white/10 backdrop-blur-2xl p-12 rounded-[3rem] border border-slate-200 dark:border-white/20 shadow-2xl"
           >
             <div className="w-24 h-24 relative flex items-center justify-center mb-8">
-              <div className="absolute inset-0 border-4 border-[#0047FF]/20 rounded-full" />
-              <div className="absolute inset-0 border-4 border-[#0047FF] border-t-transparent rounded-full animate-spin" />
-              <FileSearch className="w-10 h-10 text-[#0047FF]" />
+              <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full" />
+              <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
+              <FileSearch className="w-10 h-10 text-brand-primary" />
             </div>
-            <p className="text-[#0047FF] font-black uppercase tracking-widest text-xl animate-pulse">MEMPROSES...</p>
-            <p className="text-slate-400 mt-2">Menganalisa bukti transaksi OCR...</p>
+            <p className="text-brand-primary font-black uppercase tracking-widest text-xl animate-pulse">MEMPROSES...</p>
+            <p className="text-slate-600 dark:text-slate-400 mt-2">Menganalisa bukti transaksi OCR...</p>
           </motion.div>
         )}
 
@@ -140,27 +140,26 @@ export default function ReceiptVerificationPage() {
             key="success-ui"
             initial={{ opacity: 0, scale: 0.5, y: 50 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="relative z-10 w-full max-w-lg bg-[#020617]/80 backdrop-blur-[30px] rounded-[3rem] border border-pink-500/30 shadow-[0_0_100px_rgba(255,0,127,0.3)] flex flex-col justify-center items-center text-center p-12"
+            className="relative z-10 w-full max-w-lg glass-card rounded-[3rem] border-brand-accent/20 shadow-2xl flex flex-col justify-center items-center text-center p-12"
           >
             <motion.div
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
-              className="bg-pink-500/20 p-6 rounded-full border border-pink-500/50 mb-8"
+              className="bg-emerald-500/10 p-6 rounded-full border border-emerald-500/30 mb-8"
             >
-              <CheckCircle2 className="w-24 h-24 text-pink-500" />
+              <CheckCircle2 className="w-24 h-24 text-emerald-500" />
             </motion.div>
 
-            <h2 className="text-4xl md:text-5xl font-black uppercase tracking-widest text-white mb-6">
+            <h2 className="text-4xl md:text-5xl font-black uppercase tracking-widest text-slate-900 dark:text-white mb-6">
               BERHASIL!
             </h2>
 
-            <div className="w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent mb-6" />
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-white/20 to-transparent mb-6" />
 
-            <p className="text-slate-400 font-medium">Terima kasih atas kejujuran Anda!</p>
+            <p className="text-slate-600 dark:text-slate-400 font-medium">Terima kasih atas kejujuran Anda!</p>
 
-            {/* Tampilan Detik Berubah di Sini */}
-            <p className="text-[#0047FF] mt-4 font-bold text-sm bg-[#0047FF]/10 px-6 py-2 rounded-full border border-[#0047FF]/20">
-              Sistem mengulang otomatis dalam <span className="text-white text-lg mx-1">{countdown}</span> detik
+            <p className="text-brand-primary mt-4 font-bold text-sm bg-brand-primary/10 px-6 py-2 rounded-full border border-brand-primary/20">
+              Sistem mengulang otomatis dalam <span className="text-brand-primary font-black text-lg mx-1">{countdown}</span> detik
             </p>
           </motion.div>
         )}

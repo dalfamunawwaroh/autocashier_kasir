@@ -1,23 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, ShieldCheck, Save } from 'lucide-react';
+import { User, ShieldCheck, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { useTheme } from 'next-themes';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 export default function ProfilePage({ user, onUpdate }: { user: any, onUpdate: (user: any) => void }) {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState(user?.name || '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,95 +41,69 @@ export default function ProfilePage({ user, onUpdate }: { user: any, onUpdate: (
   };
 
   return (
-    <div className={cn(
-      "min-h-screen flex flex-col font-sans transition-colors duration-300",
-      isDark ? "bg-[#0f172a] text-[#f1f5f9]" : "bg-slate-50 text-slate-900"
-    )}>
-      {/* Header */}
-      <div className={cn(
-        "h-16 border-b flex items-center px-8 shrink-0 relative transition-colors duration-300",
-        isDark ? "bg-[#1e293b] border-slate-700" : "bg-white border-slate-200"
-      )}>
-        <button 
-          onClick={() => navigate('/kasir')}
-          className={cn(
-            "p-2 rounded-full mr-4 transition-colors",
-            isDark ? "hover:bg-slate-800" : "hover:bg-slate-100"
-          )}
-        >
-          <ArrowLeft className="w-5 h-5 text-slate-400" />
-        </button>
-        <h1 className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
-          <User className="w-6 h-6 text-blue-500" />
-          Profile Settings
-        </h1>
-      </div>
+    <div className="min-h-screen pt-24 pb-12 px-6">
+      <div className="max-w-3xl mx-auto w-full">
+        <div className="mb-10">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight font-heading flex items-center gap-4">
+            <User className="w-8 h-8 text-neon-blue" />
+            Pengaturan Profil
+          </h1>
+          <p className="text-slate-600 dark:text-slate-500 font-medium mt-2">Kelola informasi akun dan keamanan Anda.</p>
+        </div>
 
-      <div className="flex-1 p-8 max-w-3xl mx-auto w-full">
-        <div className={cn(
-          "p-8 rounded-3xl border transition-colors duration-300",
-          isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"
-        )}>
+        <div className="glass-card p-8 md:p-12 rounded-[3rem] relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-neon-blue/10 blur-3xl rounded-full" />
           
-          <div className="flex items-center gap-6 mb-10 pb-10 border-b border-slate-800 border-dashed">
-            <div className={cn(
-              "w-24 h-24 rounded-full border-4 shadow-xl flex items-center justify-center",
-              isDark ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-200"
-            )}>
-              <User className="w-10 h-10 text-slate-400" />
+          <div className="flex flex-col md:flex-row items-center gap-8 mb-12 pb-12 border-b border-slate-200 dark:border-white/5">
+            <div className="w-24 h-24 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center shadow-premium">
+              <User className="w-10 h-10 text-neon-blue" />
             </div>
-            <div>
-              <h2 className="text-2xl font-black">{user?.name}</h2>
-              <p className="text-slate-500 font-mono text-sm mt-1">@{user?.username}</p>
-              <div className="flex items-center gap-2 mt-3">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span className="bg-emerald-500/10 text-emerald-500 text-[10px] font-bold px-2 py-1 rounded border border-emerald-500/20 uppercase tracking-widest">
-                  {user?.role}
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white font-heading">{user?.name}</h2>
+              <p className="text-neon-blue font-mono text-sm mt-1">@{user?.username}</p>
+              <div className="flex items-center gap-2 mt-4 justify-center md:justify-start">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-3 py-1 rounded-full border border-emerald-500/20 uppercase tracking-widest">
+                  {user?.role?.replace('_', ' ')}
                 </span>
               </div>
             </div>
           </div>
 
-          <form onSubmit={handleUpdate} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Display Name</label>
+          <form onSubmit={handleUpdate} className="space-y-8">
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Nama Lengkap</label>
               <input 
                 type="text" 
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
                 required
-                className={cn(
-                  "w-full px-4 py-3 rounded-xl border focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors",
-                  isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-900"
-                )}
+                className="w-full bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-neon-blue transition-all"
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">New Password</label>
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Kata Sandi Baru</label>
               <input 
                 type="password" 
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="Leave blank to keep current password"
-                className={cn(
-                  "w-full px-4 py-3 rounded-xl border focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors",
-                  isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-900"
-                )}
+                placeholder="Kosongkan jika tidak ingin mengubah"
+                className="w-full bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-600 focus:outline-none focus:border-neon-blue transition-all"
               />
             </div>
 
             <button 
               type="submit" 
-              disabled={loading || (!fullName.trim() && !password)}
-              className="w-full mt-6 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:opacity-50 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              disabled={loading}
+              className="w-full bg-neon-blue hover:shadow-glow text-white py-5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
                   <Save className="w-5 h-5" />
-                  SAVE CHANGES
+                  SIMPAN PERUBAHAN
                 </>
               )}
             </button>

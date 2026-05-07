@@ -72,8 +72,8 @@ export default function CartSummaryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] flex justify-center items-start md:items-center p-4 md:p-10 text-white relative overflow-x-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[#0047FF]/5 blur-[120px] pointer-events-none" />
+    <div className="min-h-screen bg-surface-light dark:bg-surface-dark bg-mesh flex justify-center items-start md:items-center p-4 md:p-10 text-slate-900 dark:text-white relative overflow-x-hidden">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-brand-primary/5 blur-[120px] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -81,118 +81,118 @@ export default function CartSummaryPage() {
         className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-5 gap-6 z-10"
       >
         {/* --- LEFT: PRODUCT DETAIL --- */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/10 p-8 flex flex-col h-[500px] md:h-[650px]">
-            <div className="flex justify-between items-end mb-6">
-              <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500">Detail Belanja</h2>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full border border-white/5">{totalQty} ITEMS</span>
-            </div>
+          <div className="lg:col-span-3 space-y-6">
+            <div className="glass-card rounded-[2.5rem] p-8 flex flex-col h-[500px] md:h-[650px]">
+              <div className="flex justify-between items-end mb-6">
+                <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900 dark:text-white">Detail Belanja</h2>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-3 py-1 rounded-full border border-slate-200 dark:border-white/10">{totalQty} ITEMS</span>
+              </div>
 
-            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 text-left">
-              {items.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-20 italic">
-                  <ShoppingCart className="w-16 h-16 mb-4" />
-                  <p>Keranjang Kosong</p>
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 text-left">
+                {items.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 italic text-slate-500">
+                    <ShoppingCart className="w-16 h-16 mb-4" />
+                    <p>Keranjang Kosong</p>
+                  </div>
+                ) : (
+                  items.map((item, idx) => (
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      key={idx}
+                      className="flex items-center gap-4 bg-slate-50/50 dark:bg-white/5 p-5 rounded-[2rem] border border-slate-200 dark:border-white/10 group hover:border-neon-blue transition-all"
+                    >
+                      <div className="w-14 h-14 bg-gradient-to-br from-neon-blue/10 to-accent-pink/10 rounded-2xl flex items-center justify-center border border-slate-200 dark:border-white/10 shadow-inner">
+                        <span className="text-2xl">📦</span>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-black text-sm tracking-tight leading-tight uppercase group-hover:text-neon-blue transition-colors text-slate-900 dark:text-white">{item.name}</h4>
+                        <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1 italic leading-none">ID: {item.id}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-neon-blue font-black text-sm leading-none mb-1">x{item.qty}</p>
+                        <p className="text-xs font-bold text-slate-500 dark:text-white/40 italic leading-none">Rp{(item.price * item.qty).toLocaleString('id-ID')}</p>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* --- RIGHT: SUMMARY & PAYMENT --- */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* MEMBER SECTION */}
+            <div className="glass-card rounded-[2.5rem] p-6 text-left">
+              {!isMember ? (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Identity Check</p>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1 group">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-neon-blue transition-colors" />
+                      <input
+                        type="number"
+                        placeholder="Nomor HP Member"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl py-4 pl-11 pr-4 outline-none focus:border-neon-blue transition-all font-bold text-sm text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <button onClick={handleVerifyPhone} disabled={isVerifying || phoneNumber.length < 10} className="bg-neon-blue px-6 rounded-2xl font-black uppercase text-xs text-white shadow-lg active:scale-95 disabled:opacity-30 transition-all">
+                      {isVerifying ? '...' : 'Cek'}
+                    </button>
+                  </div>
                 </div>
               ) : (
-                items.map((item, idx) => (
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.1 }}
-                    key={idx}
-                    className="flex items-center gap-4 bg-white/5 p-5 rounded-[2rem] border border-white/5 group hover:bg-white/10 transition-all"
-                  >
-                    <div className="w-14 h-14 bg-gradient-to-br from-[#0047FF]/20 to-pink-500/10 rounded-2xl flex items-center justify-center border border-white/10 shadow-inner">
-                      <span className="text-2xl">📦</span>
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
+                        <CheckCircle2 className="text-emerald-500 w-5 h-5" />
+                      </div>
+                      <span className="font-black text-[10px] uppercase tracking-tighter italic text-slate-900 dark:text-white">Member JagoAI Active</span>
                     </div>
-                    <div className="flex-1">
-                      <h4 className="font-black text-sm tracking-tight leading-tight uppercase group-hover:text-[#0047FF] transition-colors">{item.name}</h4>
-                      <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1 italic leading-none">ID: {item.id}</p>
+                    <button onClick={() => { setIsMember(false); setUsePoints(false); handleRemoveVoucher(); }} className="text-[9px] font-black text-slate-500 hover:text-accent-pink uppercase italic transition-colors">Ganti</button>
+                  </div>
+
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-left">
+                      <Coins className="text-amber-500 w-6 h-6" />
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/60 leading-none mb-1">Point Balance</p>
+                        <p className="text-sm font-black italic tracking-tighter leading-none text-slate-900 dark:text-white">{DUMMY_MEMBER_POINTS.toLocaleString('id-ID')} PTS</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[#0047FF] font-black text-sm leading-none mb-1">x{item.qty}</p>
-                      <p className="text-xs font-bold text-white/40 italic leading-none">Rp{(item.price * item.qty).toLocaleString('id-ID')}</p>
-                    </div>
-                  </motion.div>
-                ))
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} className="sr-only peer" />
+                      <div className="w-10 h-5 bg-slate-200 dark:bg-white/10 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500 shadow-inner"></div>
+                    </label>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* --- RIGHT: SUMMARY & PAYMENT --- */}
-        <div className="lg:col-span-2 space-y-6">
+            {/* VOUCHER SECTION */}
+            <div className="glass-card rounded-[2.5rem] p-6 space-y-4 text-left relative overflow-hidden">
+              <label className="text-[10px] font-black text-slate-500 uppercase flex justify-between px-1 tracking-widest">
+                <span>Promo Code</span>
+                {!isMember && <span className="text-accent-pink flex items-center gap-1"><Lock className="w-3 h-3" /> Member Only</span>}
+              </label>
 
-          {/* MEMBER SECTION */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/10 p-6 text-left">
-            {!isMember ? (
-              <div className="space-y-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Identity Check</p>
-                <div className="flex gap-2">
-                  <div className="relative flex-1 group">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#0047FF] transition-colors" />
-                    <input
-                      type="number"
-                      placeholder="Nomor HP Member"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-11 pr-4 outline-none focus:border-[#0047FF] transition-all font-bold text-sm"
-                    />
-                  </div>
-                  <button onClick={handleVerifyPhone} disabled={isVerifying || phoneNumber.length < 10} className="bg-[#0047FF] px-6 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95 disabled:opacity-30 transition-all">
-                    {isVerifying ? '...' : 'Cek'}
-                  </button>
+              <div className="flex gap-2">
+                <div className="relative flex-1 group">
+                  <Ticket className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isMember ? 'text-neon-blue' : 'text-slate-400'}`} />
+                  <input
+                    type="text"
+                    value={voucherInput}
+                    onChange={(e) => setVoucherInput(e.target.value)}
+                    disabled={!isMember || !!activeVoucher}
+                    placeholder="EX: JAGO10"
+                    className={`w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl py-4 pl-11 pr-4 font-black uppercase outline-none transition-all text-sm ${isMember ? 'focus:border-neon-blue' : 'opacity-20 italic'} ${activeVoucher ? 'text-emerald-500 border-emerald-500/50' : 'text-slate-900 dark:text-white'}`}
+                  />
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-green-500/20 p-2 rounded-xl border border-green-500/30">
-                      <CheckCircle2 className="text-green-500 w-5 h-5" />
-                    </div>
-                    <span className="font-black text-[10px] uppercase tracking-tighter italic">Member JagoAI Active</span>
-                  </div>
-                  <button onClick={() => { setIsMember(false); setUsePoints(false); handleRemoveVoucher(); }} className="text-[9px] font-black text-slate-500 hover:text-pink-500 uppercase italic transition-colors">Ganti</button>
-                </div>
-
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-left">
-                    <Coins className="text-yellow-500 w-6 h-6" />
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500/60 leading-none mb-1">Point Balance</p>
-                      <p className="text-sm font-black italic tracking-tighter leading-none">{DUMMY_MEMBER_POINTS.toLocaleString('id-ID')} PTS</p>
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} className="sr-only peer" />
-                    <div className="w-10 h-5 bg-white/10 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-500 shadow-inner"></div>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* VOUCHER SECTION (Updated with Remove Feature) */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/10 p-6 space-y-4 text-left relative overflow-hidden">
-            <label className="text-[10px] font-black text-slate-500 uppercase flex justify-between px-1 tracking-widest">
-              <span>Promo Code</span>
-              {!isMember && <span className="text-pink-500 flex items-center gap-1"><Lock className="w-3 h-3" /> Member Only</span>}
-            </label>
-
-            <div className="flex gap-2">
-              <div className="relative flex-1 group">
-                <Ticket className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isMember ? 'text-[#0047FF]' : 'text-slate-700'}`} />
-                <input
-                  type="text"
-                  value={voucherInput}
-                  onChange={(e) => setVoucherInput(e.target.value)}
-                  disabled={!isMember || !!activeVoucher}
-                  placeholder="EX: JAGO10"
-                  className={`w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-11 pr-4 font-black uppercase outline-none transition-all text-sm ${isMember ? 'focus:border-[#0047FF]' : 'opacity-20 italic'} ${activeVoucher ? 'text-green-500 border-green-500/50' : 'text-white'}`}
-                />
-              </div>
 
               {!activeVoucher ? (
                 <button

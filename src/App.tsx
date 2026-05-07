@@ -50,16 +50,16 @@ function App() {
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-deep-dark">
-        <div className="w-12 h-12 border-4 border-neon-cobalt border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <Router>
-      <div className="min-h-screen bg-deep-dark transition-colors duration-300">
-        <Toaster position="top-right" richColors theme="dark" />
+      <div className="min-h-screen bg-mesh text-slate-900 dark:text-slate-200 transition-colors duration-500">
+        <Toaster position="top-right" richColors />
         <NavbarWrapper user={user} onLogout={handleLogout} />
         
         <Routes>
@@ -116,13 +116,8 @@ function App() {
   );
 }
 
-// Helper to hide navbar on Kiosk routes
+// Consistent Navbar across all pages
 const NavbarWrapper = ({ user, onLogout }: { user: any; onLogout: () => void }) => {
-  const { pathname } = useLocation();
-  const kioskRoutes = ['/', '/scan', '/identity-check', '/cart', '/payment', '/verify-receipt', '/kasir', '/dashboard', '/analytics', '/profile'];
-  const hideNavbar = kioskRoutes.includes(pathname);
-  
-  if (hideNavbar) return null;
   return <Navbar user={user} onLogout={onLogout} />;
 };
 
