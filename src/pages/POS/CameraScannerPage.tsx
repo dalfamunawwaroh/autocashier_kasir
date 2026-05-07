@@ -1,11 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, ShoppingBag, ShieldCheck, Loader2,
-  Phone, ArrowRight, SkipForward, AlertCircle, X, Zap, Target, Scan
+  Phone, ArrowRight, SkipForward, AlertCircle, X, Scan, Camera
 } from 'lucide-react';
-import { ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 import { useAppStore, translations } from '../../store/useAppStore';
 
 export interface CartItem {
@@ -15,12 +14,6 @@ export interface CartItem {
   price: number;
   qty: number;
 }
-
-const LOCAL_PRICE_MAP: Record<string, any> = {
-  'pop_mie': { id: 1, label: 'pop_mie', name: 'Pop Mie Rasa Ayam', price: 6500 },
-  'le_minerale': { id: 3, label: 'le_minerale', name: 'Le Minerale 600ml', price: 4000 },
-  'aqua_600ml': { id: 'prod_002', label: 'aqua_600ml', name: 'Aqua 600ml', price: 3500 }
-};
 
 // --- COMPONENT: IDENTITY CHECK MODAL ---
 interface IdentityCheckModalProps {
@@ -51,6 +44,11 @@ function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
       }
       setIsLoading(false);
     }, 1000);
+  };
+
+  const handleSkip = () => {
+    setIdentity({ name: 'Guest', role: 'kasir' }, false);
+    navigate('/cart', { state: { items: cartItems } });
   };
 
   return (
@@ -111,148 +109,306 @@ export default function CameraScannerPage() {
   const { language } = useAppStore();
   const t = translations[language];
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isProcessingRef = useRef(false);
 
-  const [detector, setDetector] = useState<ObjectDetector | null>(null);
-  const [isModelLoading, setIsModelLoading] = useState(true);
+  const [isCameraReady, setIsCameraReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [detectedItems, setDetectedItems] = useState<CartItem[]>([]);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
-  const [cvState, setCvState] = useState<{
+  const [scanState, setScanState] = useState<{
     label: string | null;
-    status: 'VISION MODE' | 'LOCKED' | 'CONFIRMED';
-    progress: number;
+    status: 'SCANNING' | 'DETECTED' | 'CONFIRMED' | 'IDLE';
+    confidence: number;
     box: { x: number, y: number, w: number, h: number } | null;
-  }>({ label: null, status: 'VISION MODE', progress: 0, box: null });
+  }>({ label: null, status: 'IDLE', confidence: 0, box: null });
 
-  const lastRoboflowTime = useRef(0);
-  const isLockedRef = useRef(false);
-
-  const totalQty   = detectedItems.reduce((acc, i) => acc + i.qty, 0);
+  const totalQty = detectedItems.reduce((acc, i) => acc + i.qty, 0);
   const totalPrice = detectedItems.reduce((acc, i) => acc + i.price * i.qty, 0);
 
-  const addLog = (msg: string) => setLogs(prev => [msg, ...prev].slice(0, 5));
-
-  // Init: kamera + MediaPipe ObjectDetector saja (tanpa HandLandmarker)
+  // 1. Init Camera
   useEffect(() => {
-    async function init() {
+    async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
         });
-        if (videoRef.current) videoRef.current.srcObject = stream;
-
-        const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
-        );
-        const objectDetector = await ObjectDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite',
-            delegate: 'GPU'
-          },
-          runningMode: 'VIDEO',
-          scoreThreshold: 0.2,
-        });
-
-        setDetector(objectDetector);
-        setIsModelLoading(false);
-        addLog('MediaPipe siap. Roboflow standby.');
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            setIsCameraReady(true);
+          };
+        }
       } catch (err: any) {
-        setInitError(err.message || 'Gagal memulai sistem');
-        setIsModelLoading(false);
+        console.error('Camera init error:', err);
+        setInitError(err.message || 'Gagal akses kamera');
       }
     }
-    init();
+    initCamera();
     return () => {
-      if (videoRef.current?.srcObject)
+      if (videoRef.current?.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      }
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
     };
   }, []);
 
-  // Loop: MediaPipe untuk visual box + trigger Roboflow setiap 2 detik
+  // 2. Start auto-scanning when camera is ready
   useEffect(() => {
-    let requestUpdate: number;
-    const runDetection = async () => {
-      if (model && videoRef.current?.readyState === 4 && cvState.status === 'VISION MODE') {
-        const predictions = await model.detect(videoRef.current);
-        if (predictions.length > 0) {
-          const primary = predictions[0];
-          let mappedLabel = '';
-          if (primary.class === 'cup') mappedLabel = 'pop_mie';
-          if (primary.class === 'bottle') mappedLabel = 'le_minerale';
-          if (mappedLabel && LOCAL_PRICE_MAP[mappedLabel]) {
-            handleDetectionLogic(mappedLabel, primary.bbox);
-          }
-        }
+    if (!isCameraReady) return;
+
+    // Start scanning loop
+    setScanState(prev => ({ ...prev, status: 'SCANNING' }));
+
+    scanIntervalRef.current = setInterval(() => {
+      if (!isProcessingRef.current) {
+        captureAndDetect();
       }
-      requestUpdate = requestAnimationFrame(runDetection);
+    }, 1500);
+
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
     };
-    if (!isModelLoading) runDetection();
-    return () => cancelAnimationFrame(requestUpdate);
-  }, [model, isModelLoading, cvState.status]);
+  }, [isCameraReady]);
 
-  const handleDetectionLogic = (label: string, bbox: number[]) => {
-    setCvState({ label, status: 'LOCKED', progress: 0, box: { x: bbox[0], y: bbox[1], w: bbox[2], h: bbox[3] } });
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += 10;
-      setCvState(prev => ({ ...prev, progress: currentProgress }));
-      if (currentProgress >= 100) {
-        clearInterval(interval);
-        confirmDetection(label);
+  // 3. Capture frame and send to Roboflow via backend
+  const captureAndDetect = useCallback(async () => {
+    if (!videoRef.current || videoRef.current.readyState < 4) return;
+    if (isProcessingRef.current) return;
+
+    isProcessingRef.current = true;
+    setIsScanning(true);
+
+    try {
+      // Capture frame from video
+      const canvas = canvasRef.current || document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(videoRef.current, 0, 0);
+      const base64Image = canvas.toDataURL('image/jpeg', 0.7);
+
+      // Send to backend /api/detect
+      const response = await fetch('/api/detect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.label) {
+        console.log(`[SCAN] Detected: ${data.label} (${(data.confidence * 100).toFixed(1)}%) via ${data.source}`);
+
+        // Calculate box position relative to video display
+        const videoEl = videoRef.current;
+        const displayW = videoEl.clientWidth;
+        const displayH = videoEl.clientHeight;
+        const videoW = videoEl.videoWidth;
+        const videoH = videoEl.videoHeight;
+        const scaleX = displayW / videoW;
+        const scaleY = displayH / videoH;
+
+        const bbox = data.bbox || [0, 0, 100, 100];
+        const boxForDisplay = {
+          x: bbox[0] * scaleX,
+          y: bbox[1] * scaleY,
+          w: (bbox[2] - bbox[0]) * scaleX,
+          h: (bbox[3] - bbox[1]) * scaleY
+        };
+
+        // Pause scanning interval
+        if (scanIntervalRef.current) {
+          clearInterval(scanIntervalRef.current);
+          scanIntervalRef.current = null;
+        }
+
+        // Show detected state
+        setScanState({
+          label: data.product?.name || data.label,
+          status: 'DETECTED',
+          confidence: data.confidence,
+          box: boxForDisplay
+        });
+
+        // After short delay, confirm and add to cart
+        setTimeout(() => {
+          const productData = data.product;
+          const label = data.label;
+          const productName = productData?.name || label;
+          const productPrice = productData?.price || 0;
+          const productId = productData?.id || label;
+
+          // Play success sound
+          new Audio('https://assets.mixkit.co/active_storage/sfx/707/707-preview.mp3').play().catch(() => {});
+
+          setScanState(prev => ({ ...prev, status: 'CONFIRMED' }));
+
+          setDetectedItems(prev => {
+            const exists = prev.find(i => i.label === label || i.id === productId);
+            if (exists) {
+              return prev.map(i => (i.label === label || i.id === productId) ? { ...i, qty: i.qty + 1 } : i);
+            }
+            return [...prev, {
+              id: productId,
+              label: label,
+              name: productName,
+              price: productPrice,
+              qty: 1
+            }];
+          });
+
+          // After 2s, reset and resume scanning
+          setTimeout(() => {
+            setScanState({ label: null, status: 'SCANNING', confidence: 0, box: null });
+
+            // Resume scanning
+            scanIntervalRef.current = setInterval(() => {
+              if (!isProcessingRef.current) {
+                captureAndDetect();
+              }
+            }, 1500);
+          }, 2000);
+
+        }, 800);
+
+      } else {
+        // Nothing detected, keep scanning
+        setScanState(prev => ({ ...prev, status: 'SCANNING', box: null, label: null }));
       }
-    }, 100);
-  };
-
-  const confirmDetection = (label: string) => {
-    const item = LOCAL_PRICE_MAP[label];
-    if (!item) return;
-    new Audio('https://assets.mixkit.co/active_storage/sfx/707/707-preview.mp3').play().catch(() => { });
-    setCvState(prev => ({ ...prev, status: 'CONFIRMED' }));
-    setDetectedItems(prev => {
-      const exists = prev.find(i => i.label === label);
-      if (exists) return prev.map(i => i.label === label ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...item, qty: 1 }];
-    });
-    setTimeout(() => setCvState({ label: null, status: 'VISION MODE', progress: 0, box: null }), 2000);
-  };
+    } catch (err) {
+      console.error('[SCAN] Detection error:', err);
+    } finally {
+      isProcessingRef.current = false;
+      setIsScanning(false);
+    }
+  }, []);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#030712] font-sans">
-      <video ref={videoRef} autoPlay playsInline muted className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${isModelLoading ? 'opacity-20' : 'opacity-60'}`} />
+      {/* Hidden canvas for frame capture */}
+      <canvas ref={canvasRef} className="hidden" />
 
-      {/* Loading */}
-      {isModelLoading && (
+      {/* Camera Feed */}
+      <video ref={videoRef} autoPlay playsInline muted
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${!isCameraReady ? 'opacity-20' : 'opacity-60'}`}
+      />
+
+      {/* Loading State */}
+      {!isCameraReady && !initError && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 text-white">
           <Loader2 className="w-12 h-12 animate-spin text-[#0047FF] mb-6" />
-          <p className="font-black tracking-[0.4em] uppercase text-xs italic">Initializing JagoAI Engine...</p>
+          <p className="font-black tracking-[0.4em] uppercase text-xs italic">Initializing Camera...</p>
         </div>
       )}
 
-      {/* Scan Zone (saat idle, tidak ada box) */}
-      {!isModelLoading && !cvState.box && cvState.status === 'TRACKING' && (
+      {/* Error State */}
+      {initError && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 text-white p-8">
+          <AlertCircle className="w-16 h-16 text-red-500 mb-6" />
+          <p className="font-black text-xl mb-2">Kamera Gagal</p>
+          <p className="text-slate-400 text-sm text-center max-w-md">{initError}</p>
+        </div>
+      )}
+
+      {/* Scan Zone Overlay - shown when actively scanning */}
+      {isCameraReady && scanState.status === 'SCANNING' && !scanState.box && (
         <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
-          <motion.div animate={{ opacity: [0.15, 0.35, 0.15] }} transition={{ duration: 2.5, repeat: Infinity }}
-            className="w-[55%] h-[55%] border-2 border-dashed border-white/20 rounded-[40px]" />
-          <div className="absolute top-[22%] left-[22%] w-8 h-8 border-t-2 border-l-2 border-white/30 rounded-tl-lg" />
-          <div className="absolute top-[22%] right-[22%] w-8 h-8 border-t-2 border-r-2 border-white/30 rounded-tr-lg" />
-          <div className="absolute bottom-[22%] left-[22%] w-8 h-8 border-b-2 border-l-2 border-white/30 rounded-bl-lg" />
-          <div className="absolute bottom-[22%] right-[22%] w-8 h-8 border-b-2 border-r-2 border-white/30 rounded-br-lg" />
+          <motion.div
+            animate={{ opacity: [0.2, 0.5, 0.2] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="w-[60%] h-[50%] border-2 border-dashed border-[#0047FF]/40 rounded-[40px] relative"
+          >
+            {/* Corner markers */}
+            <div className="absolute -top-1 -left-1 w-10 h-10 border-t-3 border-l-3 border-[#0047FF] rounded-tl-xl" />
+            <div className="absolute -top-1 -right-1 w-10 h-10 border-t-3 border-r-3 border-[#0047FF] rounded-tr-xl" />
+            <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-3 border-l-3 border-[#0047FF] rounded-bl-xl" />
+            <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-3 border-r-3 border-[#0047FF] rounded-br-xl" />
+
+            {/* Scan line animation */}
+            <motion.div
+              animate={{ y: [0, 250, 0] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute left-4 right-4 h-[2px] bg-gradient-to-r from-transparent via-[#0047FF] to-transparent"
+            />
+          </motion.div>
+
+          {/* Instruction text */}
+          <div className="absolute bottom-[30%] flex items-center gap-2 text-white/40 text-xs font-bold uppercase tracking-widest">
+            <Camera className="w-4 h-4" />
+            Arahkan produk ke kamera
+          </div>
         </div>
       )}
 
-      {/* Bounding Box dari MediaPipe */}
-      <AnimatePresence>
-        {cvState.box && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1, borderColor: cvState.status === 'CONFIRMED' ? '#22c55e' : '#0047FF' }} exit={{ opacity: 0, scale: 1.1 }}
-            className="absolute z-50 border-[4px] rounded-[30px] pointer-events-none shadow-[0_0_50px_rgba(0,71,255,0.3)]"
-            style={{ left: cvState.box.x, top: cvState.box.y, width: cvState.box.w, height: cvState.box.h }}
+      {/* Scanning indicator pulse */}
+      {isScanning && scanState.status === 'SCANNING' && (
+        <div className="absolute top-32 left-1/2 -translate-x-1/2 z-30">
+          <motion.div
+            animate={{ opacity: [0.5, 1, 0.5], scale: [0.95, 1.05, 0.95] }}
+            transition={{ duration: 1, repeat: Infinity }}
+            className="flex items-center gap-2 bg-[#0047FF]/20 border border-[#0047FF]/40 px-5 py-2.5 rounded-full text-[#0047FF] text-xs font-black uppercase tracking-widest"
           >
-            <div className={`absolute -top-12 left-0 px-4 py-2 rounded-xl text-white text-xs font-black flex items-center gap-2 ${cvState.status === 'CONFIRMED' ? 'bg-green-500' : 'bg-[#0047FF]'}`}>
-              {cvState.status === 'CONFIRMED' ? <ShieldCheck className="w-4 h-4" /> : <Scan className="w-4 h-4 animate-spin" />}
-              {cvState.label?.replace('_', ' ').toUpperCase()}
+            <Scan className="w-4 h-4 animate-spin" /> Menganalisis...
+          </motion.div>
+        </div>
+      )}
+
+      {/* Bounding Box from Roboflow detection */}
+      <AnimatePresence>
+        {scanState.box && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              borderColor: scanState.status === 'CONFIRMED' ? '#22c55e' : '#0047FF'
+            }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            className="absolute z-50 border-[4px] rounded-[20px] pointer-events-none"
+            style={{
+              left: scanState.box.x,
+              top: scanState.box.y,
+              width: scanState.box.w,
+              height: scanState.box.h,
+              boxShadow: scanState.status === 'CONFIRMED'
+                ? '0 0 40px rgba(34,197,94,0.4)'
+                : '0 0 40px rgba(0,71,255,0.4)'
+            }}
+          >
+            {/* Label badge */}
+            <div className={`absolute -top-10 left-0 px-4 py-2 rounded-xl text-white text-xs font-black flex items-center gap-2 ${
+              scanState.status === 'CONFIRMED' ? 'bg-green-500' : 'bg-[#0047FF]'
+            }`}>
+              {scanState.status === 'CONFIRMED'
+                ? <ShieldCheck className="w-4 h-4" />
+                : <Scan className="w-4 h-4 animate-spin" />
+              }
+              {scanState.label?.toUpperCase()}
+              {scanState.confidence > 0 && (
+                <span className="opacity-60 ml-1">{(scanState.confidence * 100).toFixed(0)}%</span>
+              )}
             </div>
-            {cvState.status === 'LOCKED' && <div className="absolute inset-0 rounded-[26px] overflow-hidden"><motion.div className="absolute bottom-0 left-0 right-0 bg-blue-500/40" animate={{ height: `${cvState.progress}%` }} /></div>}
+
+            {/* Progress fill for DETECTED state */}
+            {scanState.status === 'DETECTED' && (
+              <div className="absolute inset-0 rounded-[16px] overflow-hidden">
+                <motion.div
+                  initial={{ height: '0%' }}
+                  animate={{ height: '100%' }}
+                  transition={{ duration: 0.8 }}
+                  className="absolute bottom-0 left-0 right-0 bg-blue-500/30"
+                />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -262,12 +418,21 @@ export default function CameraScannerPage() {
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
           <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">JagoAI <span className="text-[#0047FF]">VISION</span></div>
           <div className="flex items-center gap-4 bg-[#0047FF]/10 px-6 py-2.5 rounded-full border border-[#0047FF]/30 text-[10px] font-black uppercase tracking-widest text-[#0047FF]">
-            <div className={`w-2.5 h-2.5 rounded-full ${cvState.status !== 'VISION MODE' ? 'bg-red-500 animate-pulse' : 'bg-[#0047FF]'}`} />
-            {cvState.status}
+            <div className={`w-2.5 h-2.5 rounded-full ${
+              scanState.status === 'CONFIRMED' ? 'bg-green-500' :
+              scanState.status === 'DETECTED' ? 'bg-amber-500 animate-pulse' :
+              scanState.status === 'SCANNING' ? 'bg-[#0047FF]' :
+              'bg-slate-500'
+            }`} />
+            {scanState.status === 'SCANNING' ? 'VISION MODE' :
+             scanState.status === 'DETECTED' ? 'LOCKED' :
+             scanState.status === 'CONFIRMED' ? 'CONFIRMED' :
+             'IDLE'}
           </div>
         </div>
       </div>
 
+      {/* Cart Panel */}
       <div className="absolute left-8 bottom-8 z-20 w-85 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-[45px] flex flex-col max-h-[480px] text-white shadow-2xl overflow-hidden">
         <div className="p-10 pb-5">
           <div className="flex items-center gap-3 opacity-50 text-[10px] font-black uppercase tracking-[0.3em] mb-4">
@@ -283,11 +448,12 @@ export default function CameraScannerPage() {
               <motion.div initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }} key={idx} className="flex justify-between items-center group">
                 <div className="flex flex-col text-left">
                   <span className="text-sm font-black tracking-tight group-hover:text-[#0047FF] transition-colors">{item.name}</span>
+                  <span className="text-[10px] text-slate-500">Rp{item.price.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="text-[#0047FF] font-black text-lg bg-white/5 px-3 py-1 rounded-lg">x{item.qty}</div>
               </motion.div>
             ))
-          }
+          )}
         </div>
         <div className="p-10 pt-5">
           <div className="h-[1px] bg-slate-200 dark:bg-white/5 w-full mb-8" />
@@ -298,7 +464,7 @@ export default function CameraScannerPage() {
         </div>
       </div>
 
-      {/* Bayar */}
+      {/* Bayar Button */}
       <button disabled={detectedItems.length === 0} onClick={() => setIsIdentityModalOpen(true)}
         className={`absolute right-8 bottom-8 z-[60] px-16 py-10 rounded-[50px] font-black text-3xl uppercase flex items-center gap-6 transition-all transform active:scale-95 ${detectedItems.length > 0 ? 'bg-[#0047FF] text-white shadow-[0_20px_60px_rgba(0,71,255,0.5)]' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}
       >

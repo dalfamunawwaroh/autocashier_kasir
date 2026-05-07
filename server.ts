@@ -56,28 +56,37 @@ async function startServer() {
     }
   });
 
-  // 3. AI Detection Endpoint (Roboflow Inference API - autocashier/1)
+  // 3. AI Detection Endpoint — Roboflow YOLO v8n
   app.post("/api/detect", async (req, res) => {
     try {
       const { image } = req.body;
       if (!image) return res.status(400).json({ success: false, message: "No image provided" });
 
+      // Strip data URI prefix if present
       const base64Data = image.includes(",") ? image.split(",")[1] : image;
+      const roboflowKey = process.env.ROBOFLOW_API_KEY;
+
+      if (!roboflowKey) {
+        console.error("[AI] ROBOFLOW_API_KEY is not set!");
+        return res.status(500).json({ success: false, message: "API key not configured" });
+      }
+
       let predictions: any[] = [];
       let source = "none";
+      let rawResponse: any = null;
 
-      // Roboflow Inference API — model: autocashier/1 (YOLOv11 Nano)
+      // --- Try Roboflow Detect API (simpler, direct model endpoint) ---
       try {
-        const roboflowKey = process.env.ROBOFLOW_API_KEY || "EwaPmMe1RnCnJOGXsjYr";
-        const modelId      = "autocashier";
-        const modelVersion = "1";
-        const roboflowUrl  = `https://detect.roboflow.com/${modelId}/${modelVersion}?api_key=${roboflowKey}`;
-
-        console.log(`[AI] Calling Roboflow Inference API: ${modelId}/${modelVersion}...`);
         const controller = new AbortController();
-        const timeoutId  = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-        const response = await fetch(roboflowUrl, {
+        // Use the Roboflow Hosted Inference API
+        // Format: POST https://detect.roboflow.com/{model_id}/{version}?api_key={key}
+        // Body: raw base64 string with Content-Type: application/x-www-form-urlencoded
+        const detectUrl = `https://detect.roboflow.com/autocashier/1?api_key=${roboflowKey}`;
+        console.log(`[AI] POST ${detectUrl.replace(roboflowKey, '***')} (${(base64Data.length / 1024).toFixed(0)}KB)`);
+
+        const response = await fetch(detectUrl, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: base64Data,
@@ -85,56 +94,108 @@ async function startServer() {
         });
         clearTimeout(timeoutId);
 
-        if (response.ok) {
-          const result = await response.json();
-          predictions = result.predictions || [];
-          if (predictions.length > 0) source = "roboflow";
+        rawResponse = await response.json();
+        console.log(`[AI] Response status: ${response.status}, predictions: ${rawResponse?.predictions?.length || 0}`);
+
+        if (response.ok && rawResponse.predictions) {
+          predictions = rawResponse.predictions;
+          if (predictions.length > 0) source = "roboflow-detect";
         } else {
-          const errText = await response.text();
-          console.warn(`[AI] Roboflow failed (${response.status}): ${errText}`);
+          console.warn(`[AI] Roboflow response:`, JSON.stringify(rawResponse).substring(0, 500));
         }
       } catch (err: any) {
-        if (err.name === "AbortError") {
-          console.error("[AI] Roboflow timeout");
-        } else {
-          console.error("[AI] Roboflow error:", err);
+        console.error(`[AI] Roboflow error: ${err.name === 'AbortError' ? 'TIMEOUT' : err.message}`);
+      }
+
+      // --- If direct detect failed, try Workflow API as fallback ---
+      if (predictions.length === 0 && process.env.ROBOFLOW_WORKFLOW_URL) {
+        try {
+          const workflowUrl = process.env.ROBOFLOW_WORKFLOW_URL;
+          console.log(`[AI] Trying Workflow API fallback...`);
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+          const response = await fetch(workflowUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              api_key: roboflowKey,
+              inputs: {
+                image: { type: "base64", value: base64Data }
+              }
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          const result = await response.json();
+          console.log(`[AI] Workflow response status: ${response.status}`);
+
+          if (response.ok) {
+            // Workflow returns nested structure
+            const outputs = result.outputs || result;
+            if (Array.isArray(outputs)) {
+              const first = outputs[0];
+              predictions = first?.predictions?.predictions || first?.model_predictions?.predictions || first?.predictions || [];
+            } else if (outputs.predictions) {
+              predictions = outputs.predictions;
+            }
+            if (predictions.length > 0) source = "roboflow-workflow";
+          }
+        } catch (err: any) {
+          console.error(`[AI] Workflow fallback error: ${err.message}`);
         }
       }
 
+      // --- Process predictions ---
       if (predictions.length > 0) {
-        // Ambil prediksi dengan confidence tertinggi
-        const primary = predictions.sort((a: any, b: any) => b.confidence - a.confidence)[0];
-        const label   = primary.class as string;
+        // Sort by confidence, take the best
+        const primary = predictions.sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))[0];
+        const label = (primary.class || primary.label || "unknown") as string;
+        const confidence = primary.confidence || 0;
 
-        console.log(`[AI] Detected [${source}]: ${label} (${(primary.confidence * 100).toFixed(1)}%)`);
+        console.log(`[AI] ✅ Best: "${label}" (${(confidence * 100).toFixed(1)}%) [${source}]`);
 
-        // Cari produk di Supabase berdasarkan ai_label, SKU, atau nama
-        const { data: product } = await supabase
-          .from("products")
-          .select("*")
-          .or(`ai_label.eq."${label}",sku.eq."${label}",name.ilike."%${label}%"`)
-          .maybeSingle();
+        // Calculate bounding box (Roboflow returns center-x, center-y, width, height)
+        const x1 = (primary.x || 0) - (primary.width || 0) / 2;
+        const y1 = (primary.y || 0) - (primary.height || 0) / 2;
+        const x2 = (primary.x || 0) + (primary.width || 0) / 2;
+        const y2 = (primary.y || 0) + (primary.height || 0) / 2;
 
-        // Hitung koordinat bounding box
-        const x1   = primary.x - primary.width  / 2;
-        const y1   = primary.y - primary.height / 2;
-        const x2   = primary.x + primary.width  / 2;
-        const y2   = primary.y + primary.height / 2;
-        const bbox = [x1, y1, x2, y2];
+        // Search product in Supabase
+        let product = null;
+        try {
+          const { data } = await supabase
+            .from("products")
+            .select("*")
+            .or(`ai_label.eq.${label},sku.eq.${label},name.ilike.%${label}%`)
+            .maybeSingle();
+          product = data;
+          if (product) {
+            console.log(`[AI] 📦 Found in DB: "${product.name}" (Rp${product.price})`);
+          } else {
+            console.log(`[AI] ⚠️ No product in DB for label "${label}"`);
+          }
+        } catch (dbErr) {
+          console.error("[AI] DB lookup error:", dbErr);
+        }
 
         return res.json({
           success: true,
           product,
-          bbox,
-          confidence: primary.confidence,
+          bbox: [x1, y1, x2, y2],
+          confidence,
           source,
           label
         });
       }
 
+      // Nothing detected
+      console.log(`[AI] — No detections`);
       res.json({ success: false, message: "No objects detected" });
     } catch (error) {
-      console.error("Detection error:", error);
+      console.error("[AI] Detection endpoint error:", error);
       res.status(500).json({ success: false, message: "Detection system error" });
     }
   });
