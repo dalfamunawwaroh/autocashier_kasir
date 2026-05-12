@@ -46,8 +46,8 @@ log = logging.getLogger("vision")
 YOLO_MODEL      = os.environ.get("YOLO_MODEL", "yolov8s-worldv2.pt")
 DINO_MODEL      = os.environ.get("DINO_MODEL", "facebook/dinov2-base")
 EMBED_DB_PATH   = Path("vision_embeddings.json")
-SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.20"))
-SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.50"))
+SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.05"))
+SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.40"))
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Supabase config (dari .env atau environment)
@@ -120,7 +120,7 @@ class EmbedDB:
         self.path.write_text(json.dumps(self.db, indent=2), encoding="utf-8")
 
     def _rebuild_classes(self):
-        """Rebuild YOLO class list dari semua produk terdaftar."""
+        """Rebuild YOLO class list strictly dari semua produk terdaftar di database."""
         classes = []
         self.class_to_pid = {}
         for pid, entry in self.db.items():
@@ -128,7 +128,13 @@ class EmbedDB:
             if label and label not in classes:
                 classes.append(label)
                 self.class_to_pid[label] = pid
-        self.yolo_classes = classes if classes else ["product", "item"]
+        
+        # Tambahkan fallback khusus agar YOLO tetap menangkap bounding box
+        # DINOv2 yang akan bertugas mencocokkan benda tersebut dengan database
+        if "object" not in classes:
+            classes.append("object")
+            
+        self.yolo_classes = classes
         log.info(f"YOLO classes ({len(self.yolo_classes)}): {self.yolo_classes}")
 
     def upsert(self, pid: str, name: str, label: str, embeddings: List[List[float]]):
@@ -252,12 +258,30 @@ def sync_from_supabase() -> dict:
     log.info("🔄 Syncing products from Supabase …")
     sync_status["errors"] = []
 
-    products = _supabase_get("products?select=id,name,ai_label,image_url&order=name")
+    products = _supabase_get("products?select=id,name,ai_label&order=name")
+    product_images_data = _supabase_get("product_images?select=product_id,storage_path")
+    
     if products is None:
         err = "Failed to fetch products from Supabase"
         log.error(err)
         sync_status["errors"].append(err)
         return sync_status
+
+    # Hapus produk lama dari DB lokal (vision_db.json) yang sudah tidak ada di Supabase
+    valid_pids = [str(p.get("id", "")) for p in products]
+    for existing_pid in list(embed_db.db.keys()):
+        if existing_pid not in valid_pids:
+            log.info(f"🗑️ Menghapus produk {existing_pid} dari lokal karena sudah dihapus di database")
+            del embed_db.db[existing_pid]
+
+    # Buat mapping product_id -> list of image_urls
+    image_map = {}
+    if product_images_data:
+        for img in product_images_data:
+            pid = str(img.get("product_id", ""))
+            url = img.get("storage_path")
+            if pid and url:
+                image_map.setdefault(pid, []).append(url)
 
     total = len(products)
     log.info(f"📦 Found {total} products in Supabase")
@@ -270,7 +294,9 @@ def sync_from_supabase() -> dict:
         pid       = str(p.get("id", ""))
         name      = p.get("name", "?")
         ai_label  = (p.get("ai_label") or name).strip()
-        image_url = p.get("image_url")
+        
+        # Ambil daftar gambar dari product_images
+        image_urls = image_map.get(pid, [])
 
         if not pid or not ai_label:
             log.warning(f"Skipping product with missing id/label: {p}")
@@ -280,33 +306,58 @@ def sync_from_supabase() -> dict:
         embed_db.upsert_label_only(pid, name, ai_label)
         log.info(f"  [YOLO] Registered '{ai_label}' → '{name}'")
 
-        # ── Jika ada image_url dan belum ada embedding, compute DINOv2 ──
+        # ── Jika ada image_urls, compute DINOv2 untuk setiap gambar ──
         existing_embs = embed_db.db.get(pid, {}).get("embeddings", [])
-        if image_url:
-            if existing_embs:
+        if image_urls:
+            # Jika sudah ada embedding, kita asumsikan sudah disinkronisasi
+            if len(existing_embs) >= len(image_urls):
                 log.info(f"  [DINO] '{name}' sudah punya {len(existing_embs)} embedding, skip re-download")
                 with_emb += 1
                 continue
 
-            log.info(f"  [DINO] Downloading image for '{name}' …")
-            bgr = _download_image(image_url)
-            if bgr is None:
-                log.warning(f"  [DINO] Gagal download image untuk '{name}'")
-                no_img += 1
-                continue
+            # Karena list embeddings bisa kosong atau belum lengkap, kita reset & hitung ulang atau tambah saja
+            new_embs = []
+            for idx, url in enumerate(image_urls):
+                log.info(f"  [DINO] Downloading image {idx+1}/{len(image_urls)} for '{name}' …")
+                
+                bgr = None
+                if url.startswith("/"):
+                    # Build full Supabase storage URL (try common bucket names)
+                    base_storage = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public"
+                    variations = [
+                        f"{base_storage}/products{url}",
+                        f"{base_storage}/product_images{url}",
+                        f"{base_storage}/uploads{url}"
+                    ]
+                    for v_url in variations:
+                        bgr = _download_image(v_url)
+                        if bgr is not None:
+                            log.info(f"  [DINO] Berhasil download dari: {v_url}")
+                            break
+                else:
+                    bgr = _download_image(url)
 
-            try:
-                pil = _bgr2pil(bgr)
-                emb = _extract_embedding(pil)
-                embed_db.upsert(pid, name, ai_label, [emb.tolist()])
+                if bgr is None:
+                    log.warning(f"  [DINO] Gagal download image {idx+1} untuk '{name}'")
+                    continue
+
+                try:
+                    pil = _bgr2pil(bgr)
+                    emb = _extract_embedding(pil)
+                    new_embs.append(emb.tolist())
+                    log.info(f"  [DINO] ✅ Embedding computed untuk '{name}' (image {idx+1})")
+                except Exception as e:
+                    log.error(f"  [DINO] Error embedding '{name}' (img {idx+1}): {e}")
+                    sync_status["errors"].append(f"{name} (img {idx+1}): {e}")
+            
+            if new_embs:
+                embed_db.upsert(pid, name, ai_label, new_embs)
                 with_emb += 1
-                log.info(f"  [DINO] ✅ Embedding computed untuk '{name}'")
-            except Exception as e:
-                log.error(f"  [DINO] Error embedding '{name}': {e}")
-                sync_status["errors"].append(f"{name}: {e}")
+            else:
+                no_img += 1
         else:
             no_img += 1
-            log.info(f"  [DINO] '{name}' tidak punya image_url — hanya YOLO-World")
+            log.info(f"  [DINO] '{name}' tidak punya gambar di product_images — hanya YOLO-World")
 
     embed_db._rebuild_classes()
     embed_db.save()
