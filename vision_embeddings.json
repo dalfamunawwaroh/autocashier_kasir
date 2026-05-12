@@ -1,0 +1,50 @@
+{
+  "1d1b357f-2329-43a4-be41-24997146e03e": {
+    "id": "1d1b357f-2329-43a4-be41-24997146e03e",
+    "name": "Cimory Yogurt Bites Strawberry",
+    "label": "bottle",
+    "embeddings": []
+  },
+  "5ffc1924-9b60-4dae-a012-e903500c0a99": {
+    "id": "5ffc1924-9b60-4dae-a012-e903500c0a99",
+    "name": "Cimory Yogurt Bites Strawberry",
+    "label": "cimory_yogurt_bites",
+    "embeddings": []
+  },
+  "4f611578-0826-4786-948d-fecc14a9af5e": {
+    "id": "4f611578-0826-4786-948d-fecc14a9af5e",
+    "name": "Duosus Cheese Sus",
+    "label": "duosus_cheese_sus",
+    "embeddings": []
+  },
+  "95e116d9-70c0-4bc2-9e36-d8459b314333": {
+    "id": "95e116d9-70c0-4bc2-9e36-d8459b314333",
+    "name": "Piattos Snack Kentang",
+    "label": "piattos_snack_kentang",
+    "embeddings": []
+  },
+  "1868682c-7409-4238-843c-61a21f94a74b": {
+    "id": "1868682c-7409-4238-843c-61a21f94a74b",
+    "name": "Ryori Potato Cone",
+    "label": "ryori_potato_cone",
+    "embeddings": []
+  },
+  "f30c6d46-80d6-4ebe-b5b3-cb9aaccebb26": {
+    "id": "f30c6d46-80d6-4ebe-b5b3-cb9aaccebb26",
+    "name": "Saltcheese",
+    "label": "snack",
+    "embeddings": []
+  },
+  "286eacd1-0d64-4d33-b186-b811547ecb5f": {
+    "id": "286eacd1-0d64-4d33-b186-b811547ecb5f",
+    "name": "Tel-U Fresh Minuman",
+    "label": "tel_u_fresh",
+    "embeddings": []
+  },
+  "86d35f53-fdec-406a-a936-89a3432ed00e": {
+    "id": "86d35f53-fdec-406a-a936-89a3432ed00e",
+    "name": "Tel-U Water 150ml",
+    "label": "bottle",
+    "embeddings": []
+  }
+}

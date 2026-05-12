@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, ShoppingBag, ShieldCheck, Loader2,
-  Phone, ArrowRight, SkipForward, AlertCircle, X, Scan, Camera
+  Phone, ArrowRight, SkipForward, AlertCircle, X, Scan, Camera,
+  Cpu, Zap, WifiOff, RefreshCw, Database
 } from 'lucide-react';
 import { useAppStore, translations } from '../../store/useAppStore';
 
@@ -118,13 +119,19 @@ export default function CameraScannerPage() {
   const [detectedItems, setDetectedItems] = useState<CartItem[]>([]);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [visionOnline, setVisionOnline] = useState<boolean | null>(null);
+  const [visionProducts, setVisionProducts] = useState<number>(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const [scanState, setScanState] = useState<{
     label: string | null;
     status: 'SCANNING' | 'DETECTED' | 'CONFIRMED' | 'IDLE';
     confidence: number;
+    similarity: number | null;
+    source: string | null;
     box: { x: number, y: number, w: number, h: number } | null;
-  }>({ label: null, status: 'IDLE', confidence: 0, box: null });
+  }>({ label: null, status: 'IDLE', confidence: 0, similarity: null, source: null, box: null });
 
   const totalQty = detectedItems.reduce((acc, i) => acc + i.qty, 0);
   const totalPrice = detectedItems.reduce((acc, i) => acc + i.price * i.qty, 0);
@@ -158,7 +165,48 @@ export default function CameraScannerPage() {
     };
   }, []);
 
-  // 2. Start auto-scanning when camera is ready
+  // 2a. Check vision server health (includes product count)
+  const checkVisionHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/vision/health', { signal: AbortSignal.timeout(4000) });
+      const data = await res.json();
+      setVisionOnline(data.vision_server === 'online');
+      if (data.products !== undefined) setVisionProducts(data.products);
+    } catch {
+      setVisionOnline(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkVisionHealth();
+    const interval = setInterval(checkVisionHealth, 15000);
+    return () => clearInterval(interval);
+  }, [checkVisionHealth]);
+
+  // 2b. Sync produk dari Supabase ke vision server
+  const handleSync = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncMsg('Syncing…');
+    try {
+      const res = await fetch('/api/vision/sync?wait=true', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const s = data.sync || {};
+        setSyncMsg(`✅ ${s.total_products || 0} produk (${s.with_embeddings || 0} DINOv2)`);
+        await checkVisionHealth();
+      } else {
+        setSyncMsg(`❌ ${data.message || 'Sync gagal'}`);
+      }
+    } catch (e: any) {
+      setSyncMsg(`❌ ${e.message}`);
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncMsg(null), 4000);
+    }
+  }, [isSyncing, checkVisionHealth]);
+
+  // 2b. Start auto-scanning when camera is ready
   useEffect(() => {
     if (!isCameraReady) return;
 
@@ -236,6 +284,8 @@ export default function CameraScannerPage() {
           label: data.product?.name || data.label,
           status: 'DETECTED',
           confidence: data.confidence,
+          similarity: data.similarity ?? null,
+          source: data.source ?? null,
           box: boxForDisplay
         });
 
@@ -268,7 +318,7 @@ export default function CameraScannerPage() {
 
           // After 2s, reset and resume scanning
           setTimeout(() => {
-            setScanState({ label: null, status: 'SCANNING', confidence: 0, box: null });
+            setScanState({ label: null, status: 'SCANNING', confidence: 0, similarity: null, source: null, box: null });
 
             // Resume scanning
             scanIntervalRef.current = setInterval(() => {
@@ -282,7 +332,7 @@ export default function CameraScannerPage() {
 
       } else {
         // Nothing detected, keep scanning
-        setScanState(prev => ({ ...prev, status: 'SCANNING', box: null, label: null }));
+        setScanState(prev => ({ ...prev, status: 'SCANNING', box: null, label: null, similarity: null, source: null }));
       }
     } catch (err) {
       console.error('[SCAN] Detection error:', err);
@@ -396,7 +446,17 @@ export default function CameraScannerPage() {
               {scanState.confidence > 0 && (
                 <span className="opacity-60 ml-1">{(scanState.confidence * 100).toFixed(0)}%</span>
               )}
+              {scanState.similarity != null && (
+                <span className="opacity-50 ml-0.5 text-[9px]">sim:{(scanState.similarity * 100).toFixed(0)}%</span>
+              )}
             </div>
+            {/* Source badge below the box */}
+            {scanState.source && (
+              <div className="absolute -bottom-8 left-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-black/60 text-white/50 flex items-center gap-1">
+                {scanState.source.includes('dino') ? <Cpu className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
+                {scanState.source}
+              </div>
+            )}
 
             {/* Progress fill for DETECTED state */}
             {scanState.status === 'DETECTED' && (
@@ -417,17 +477,67 @@ export default function CameraScannerPage() {
       <div className="absolute top-0 inset-x-0 p-8 z-20">
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
           <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">JagoAI <span className="text-[#0047FF]">VISION</span></div>
-          <div className="flex items-center gap-4 bg-[#0047FF]/10 px-6 py-2.5 rounded-full border border-[#0047FF]/30 text-[10px] font-black uppercase tracking-widest text-[#0047FF]">
-            <div className={`w-2.5 h-2.5 rounded-full ${
-              scanState.status === 'CONFIRMED' ? 'bg-green-500' :
-              scanState.status === 'DETECTED' ? 'bg-amber-500 animate-pulse' :
-              scanState.status === 'SCANNING' ? 'bg-[#0047FF]' :
-              'bg-slate-500'
-            }`} />
-            {scanState.status === 'SCANNING' ? 'VISION MODE' :
-             scanState.status === 'DETECTED' ? 'LOCKED' :
-             scanState.status === 'CONFIRMED' ? 'CONFIRMED' :
-             'IDLE'}
+
+          {/* Vision pipeline & status badges */}
+          <div className="flex items-center gap-3">
+
+            {/* Sync status message */}
+            <AnimatePresence>
+              {syncMsg && (
+                <motion.div
+                  initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
+                  className="text-[9px] font-black text-white/60 bg-white/5 px-3 py-1.5 rounded-full border border-white/10"
+                >
+                  {syncMsg}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Vision server status + product count + sync button */}
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+              visionOnline === null ? 'border-white/10 text-white/30 bg-white/5' :
+              visionOnline ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10' :
+              'border-amber-500/40 text-amber-400 bg-amber-500/10'
+            }`}>
+              {visionOnline === null ? <Loader2 className="w-3 h-3 animate-spin" /> :
+               visionOnline ? <Cpu className="w-3 h-3" /> :
+               <WifiOff className="w-3 h-3" />}
+              {visionOnline === null ? 'Checking…' :
+               visionOnline ? `YOLO+DINOv2` :
+               'Offline'}
+              {visionOnline && visionProducts > 0 && (
+                <span className="flex items-center gap-1 opacity-70">
+                  <Database className="w-3 h-3" />{visionProducts}
+                </span>
+              )}
+            </div>
+
+            {/* Sync button */}
+            {visionOnline && (
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                title="Sync produk dari database"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border border-[#0047FF]/40 text-[#0047FF] bg-[#0047FF]/10 hover:bg-[#0047FF]/20 transition-all disabled:opacity-40"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing…' : 'Sync DB'}
+              </button>
+            )}
+
+            {/* Scan status */}
+            <div className="flex items-center gap-4 bg-[#0047FF]/10 px-6 py-2.5 rounded-full border border-[#0047FF]/30 text-[10px] font-black uppercase tracking-widest text-[#0047FF]">
+              <div className={`w-2.5 h-2.5 rounded-full ${
+                scanState.status === 'CONFIRMED' ? 'bg-green-500' :
+                scanState.status === 'DETECTED' ? 'bg-amber-500 animate-pulse' :
+                scanState.status === 'SCANNING' ? 'bg-[#0047FF] animate-pulse' :
+                'bg-slate-500'
+              }`} />
+              {scanState.status === 'SCANNING' ? 'SCANNING' :
+               scanState.status === 'DETECTED' ? 'LOCKED' :
+               scanState.status === 'CONFIRMED' ? 'CONFIRMED' :
+               'IDLE'}
+            </div>
           </div>
         </div>
       </div>

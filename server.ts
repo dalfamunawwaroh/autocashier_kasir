@@ -12,7 +12,9 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.log(">>> SERVER VERSION: 3.0 (Local Fallback Implementation) <<<");
+console.log(">>> SERVER VERSION: 4.0 (YOLO-World + DINOv2 Vision Pipeline) <<<");
+
+const VISION_SERVER_URL = process.env.VISION_SERVER_URL || "http://localhost:5002";
 
 async function startServer() {
   const app = express();
@@ -56,147 +58,190 @@ async function startServer() {
     }
   });
 
-  // 3. AI Detection Endpoint — Roboflow YOLO v8n
+  // 3. AI Detection Endpoint — YOLO-World + DINOv2 (via Python vision server)
   app.post("/api/detect", async (req, res) => {
     try {
       const { image } = req.body;
       if (!image) return res.status(400).json({ success: false, message: "No image provided" });
 
-      // Strip data URI prefix if present
-      const base64Data = image.includes(",") ? image.split(",")[1] : image;
-      const roboflowKey = process.env.ROBOFLOW_API_KEY;
-
-      if (!roboflowKey) {
-        console.error("[AI] ROBOFLOW_API_KEY is not set!");
-        return res.status(500).json({ success: false, message: "API key not configured" });
-      }
-
-      let predictions: any[] = [];
-      let source = "none";
-      let rawResponse: any = null;
-
-      // --- Try Roboflow Detect API (simpler, direct model endpoint) ---
+      // ── Primary: Vision Server (YOLO-World + DINOv2) ──
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        // Use the Roboflow Hosted Inference API
-        // Format: POST https://detect.roboflow.com/{model_id}/{version}?api_key={key}
-        // Body: raw base64 string with Content-Type: application/x-www-form-urlencoded
-        const detectUrl = `https://detect.roboflow.com/autocashier/1?api_key=${roboflowKey}`;
-        console.log(`[AI] POST ${detectUrl.replace(roboflowKey, '***')} (${(base64Data.length / 1024).toFixed(0)}KB)`);
-
-        const response = await fetch(detectUrl, {
+        console.log(`[VISION] Sending frame to vision server…`);
+        const visionRes = await fetch(`${VISION_SERVER_URL}/detect`, {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: base64Data,
-          signal: controller.signal
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image }),
+          signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
-        rawResponse = await response.json();
-        console.log(`[AI] Response status: ${response.status}, predictions: ${rawResponse?.predictions?.length || 0}`);
+        const visionData = await visionRes.json();
 
-        if (response.ok && rawResponse.predictions) {
-          predictions = rawResponse.predictions;
-          if (predictions.length > 0) source = "roboflow-detect";
-        } else {
-          console.warn(`[AI] Roboflow response:`, JSON.stringify(rawResponse).substring(0, 500));
+        if (visionRes.ok && visionData.success) {
+          const label      = visionData.label as string;
+          const confidence = visionData.confidence as number;
+          const similarity = visionData.similarity as number;
+          const bbox       = visionData.bbox as number[];
+          const source     = visionData.source as string;
+
+          console.log(`[VISION] ✅ Detected '${label}' conf=${(confidence*100).toFixed(1)}% sim=${similarity?.toFixed(2)} [${source}]`);
+
+          // Enrich with Supabase product data
+          let product = visionData.product || null;
+          const productId = visionData.product_id || null;
+
+          if (!product?.price && label) {
+            try {
+              const query = productId
+                ? supabase.from("products").select("*").eq("id", productId).maybeSingle()
+                : supabase.from("products").select("*")
+                    .or(`ai_label.eq.${label},sku.eq.${label},name.ilike.%${label}%`)
+                    .maybeSingle();
+              const { data } = await query;
+              if (data) {
+                product = data;
+                console.log(`[VISION] 📦 Supabase: '${product.name}' Rp${product.price}`);
+              }
+            } catch (dbErr) {
+              console.warn("[VISION] DB lookup failed:", dbErr);
+            }
+          }
+
+          return res.json({
+            success: true,
+            source,
+            label,
+            confidence,
+            similarity,
+            bbox,
+            product,
+          });
         }
-      } catch (err: any) {
-        console.error(`[AI] Roboflow error: ${err.name === 'AbortError' ? 'TIMEOUT' : err.message}`);
+
+        // Vision server responded but no detection
+        console.log(`[VISION] No detection: ${visionData.message || "unknown"}`);
+        return res.json({ success: false, message: visionData.message || "No objects detected", source: "yolo+dino" });
+
+      } catch (visionErr: any) {
+        if (visionErr.name === "AbortError") {
+          console.warn("[VISION] Timeout — vision server did not respond in time");
+        } else {
+          console.warn(`[VISION] Vision server unreachable: ${visionErr.message}`);
+        }
+        // Fall through to Roboflow fallback
       }
 
-      // --- If direct detect failed, try Workflow API as fallback ---
-      if (predictions.length === 0 && process.env.ROBOFLOW_WORKFLOW_URL) {
+      // ── Fallback: Roboflow (if vision server is down) ──
+      const roboflowKey = process.env.ROBOFLOW_API_KEY;
+      if (roboflowKey) {
         try {
-          const workflowUrl = process.env.ROBOFLOW_WORKFLOW_URL;
-          console.log(`[AI] Trying Workflow API fallback...`);
-
+          console.log(`[FALLBACK] Trying Roboflow…`);
+          const base64Data = image.includes(",") ? image.split(",")[1] : image;
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 12000);
-
-          const response = await fetch(workflowUrl, {
+          const rfRes = await fetch(`https://detect.roboflow.com/autocashier/1?api_key=${roboflowKey}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              api_key: roboflowKey,
-              inputs: {
-                image: { type: "base64", value: base64Data }
-              }
-            }),
-            signal: controller.signal
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: base64Data,
+            signal: controller.signal,
           });
           clearTimeout(timeoutId);
-
-          const result = await response.json();
-          console.log(`[AI] Workflow response status: ${response.status}`);
-
-          if (response.ok) {
-            // Workflow returns nested structure
-            const outputs = result.outputs || result;
-            if (Array.isArray(outputs)) {
-              const first = outputs[0];
-              predictions = first?.predictions?.predictions || first?.model_predictions?.predictions || first?.predictions || [];
-            } else if (outputs.predictions) {
-              predictions = outputs.predictions;
-            }
-            if (predictions.length > 0) source = "roboflow-workflow";
+          const rfData = await rfRes.json();
+          if (rfRes.ok && rfData.predictions?.length > 0) {
+            const primary    = rfData.predictions.sort((a: any, b: any) => b.confidence - a.confidence)[0];
+            const label      = (primary.class || "unknown") as string;
+            const confidence = primary.confidence || 0;
+            const x1 = (primary.x || 0) - (primary.width || 0) / 2;
+            const y1 = (primary.y || 0) - (primary.height || 0) / 2;
+            const x2 = (primary.x || 0) + (primary.width || 0) / 2;
+            const y2 = (primary.y || 0) + (primary.height || 0) / 2;
+            console.log(`[FALLBACK] Roboflow detected: '${label}' ${(confidence*100).toFixed(1)}%`);
+            const { data: product } = await supabase.from("products").select("*")
+              .or(`ai_label.eq.${label},sku.eq.${label},name.ilike.%${label}%`).maybeSingle();
+            return res.json({ success: true, source: "roboflow-fallback", label, confidence, bbox: [x1,y1,x2,y2], product });
           }
-        } catch (err: any) {
-          console.error(`[AI] Workflow fallback error: ${err.message}`);
+        } catch (rfErr: any) {
+          console.error(`[FALLBACK] Roboflow error: ${rfErr.message}`);
         }
       }
 
-      // --- Process predictions ---
-      if (predictions.length > 0) {
-        // Sort by confidence, take the best
-        const primary = predictions.sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))[0];
-        const label = (primary.class || primary.label || "unknown") as string;
-        const confidence = primary.confidence || 0;
-
-        console.log(`[AI] ✅ Best: "${label}" (${(confidence * 100).toFixed(1)}%) [${source}]`);
-
-        // Calculate bounding box (Roboflow returns center-x, center-y, width, height)
-        const x1 = (primary.x || 0) - (primary.width || 0) / 2;
-        const y1 = (primary.y || 0) - (primary.height || 0) / 2;
-        const x2 = (primary.x || 0) + (primary.width || 0) / 2;
-        const y2 = (primary.y || 0) + (primary.height || 0) / 2;
-
-        // Search product in Supabase
-        let product = null;
-        try {
-          const { data } = await supabase
-            .from("products")
-            .select("*")
-            .or(`ai_label.eq.${label},sku.eq.${label},name.ilike.%${label}%`)
-            .maybeSingle();
-          product = data;
-          if (product) {
-            console.log(`[AI] 📦 Found in DB: "${product.name}" (Rp${product.price})`);
-          } else {
-            console.log(`[AI] ⚠️ No product in DB for label "${label}"`);
-          }
-        } catch (dbErr) {
-          console.error("[AI] DB lookup error:", dbErr);
-        }
-
-        return res.json({
-          success: true,
-          product,
-          bbox: [x1, y1, x2, y2],
-          confidence,
-          source,
-          label
-        });
-      }
-
-      // Nothing detected
-      console.log(`[AI] — No detections`);
       res.json({ success: false, message: "No objects detected" });
     } catch (error) {
       console.error("[AI] Detection endpoint error:", error);
       res.status(500).json({ success: false, message: "Detection system error" });
+    }
+  });
+
+  // 3b. Vision Server — Register product reference images
+  app.post("/api/vision/register", async (req, res) => {
+    try {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 60000); // longer timeout for multiple images
+      const visionRes = await fetch(`${VISION_SERVER_URL}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+        signal: controller.signal,
+      });
+      const data = await visionRes.json();
+      res.status(visionRes.ok ? 200 : 500).json(data);
+    } catch (err: any) {
+      res.status(503).json({ success: false, message: `Vision server unreachable: ${err.message}` });
+    }
+  });
+
+  // 3c. Vision Server — List registered products
+  app.get("/api/vision/products", async (req, res) => {
+    try {
+      const visionRes = await fetch(`${VISION_SERVER_URL}/products`);
+      const data = await visionRes.json();
+      res.json(data);
+    } catch (err: any) {
+      res.status(503).json({ success: false, message: `Vision server unreachable: ${err.message}` });
+    }
+  });
+
+  // 3d. Vision Server — Delete a product from vision DB
+  app.delete("/api/vision/products/:id", async (req, res) => {
+    try {
+      const visionRes = await fetch(`${VISION_SERVER_URL}/products/${req.params.id}`, { method: "DELETE" });
+      const data = await visionRes.json();
+      res.status(visionRes.ok ? 200 : 404).json(data);
+    } catch (err: any) {
+      res.status(503).json({ success: false, message: `Vision server unreachable: ${err.message}` });
+    }
+  });
+
+  // 3e. Vision Server — Health check
+  app.get("/api/vision/health", async (req, res) => {
+    try {
+      const visionRes = await fetch(`${VISION_SERVER_URL}/health`, { signal: AbortSignal.timeout(3000) });
+      const data = await visionRes.json();
+      res.json({ ...data, vision_server: "online" });
+    } catch {
+      res.json({ status: "degraded", vision_server: "offline", message: "Run: python vision_server.py" });
+    }
+  });
+
+  // 3f. Vision Server — Sync produk dari Supabase (trigger manual)
+  app.post("/api/vision/sync", async (req, res) => {
+    try {
+      const wait = req.query.wait === "true";
+      const endpoint = wait ? "/sync/wait" : "/sync";
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), wait ? 120000 : 5000);
+      const visionRes = await fetch(`${VISION_SERVER_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+      const data = await visionRes.json();
+      res.json(data);
+    } catch (err: any) {
+      res.status(503).json({ success: false, message: `Vision server unreachable: ${err.message}` });
     }
   });
 
