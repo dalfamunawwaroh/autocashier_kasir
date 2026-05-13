@@ -46,8 +46,8 @@ log = logging.getLogger("vision")
 YOLO_MODEL      = os.environ.get("YOLO_MODEL", "yolov8s-worldv2.pt")
 DINO_MODEL      = os.environ.get("DINO_MODEL", "facebook/dinov2-base")
 EMBED_DB_PATH   = Path("vision_embeddings.json")
-SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.20"))
-SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.50"))
+SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.05"))   # diturunkan agar lebih sensitif
+SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.40"))   # diturunkan agar lebih toleran
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Supabase config (dari .env atau environment)
@@ -124,10 +124,13 @@ class EmbedDB:
         classes = []
         self.class_to_pid = {}
         for pid, entry in self.db.items():
-            label = entry.get("label", "").strip()
+            # Ganti underscore dengan spasi agar YOLO-World lebih paham
+            label = entry.get("label", "").strip().replace("_", " ")
+            entry["label"] = label
             if label and label not in classes:
                 classes.append(label)
                 self.class_to_pid[label] = pid
+
         self.yolo_classes = classes if classes else ["product", "item"]
         log.info(f"YOLO classes ({len(self.yolo_classes)}): {self.yolo_classes}")
 
@@ -195,6 +198,10 @@ def _extract_embedding(pil_img: Image.Image) -> np.ndarray:
 
 def _download_image(url: str, timeout: int = 10) -> Optional[np.ndarray]:
     """Download gambar dari URL → numpy BGR. Return None jika gagal."""
+    if url.startswith("/"):
+        # Jika URL relatif (dari backend lokal), tambahkan host localhost:3001
+        url = f"http://localhost:3001{url}"
+        
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "AutoCashier/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -252,6 +259,7 @@ def sync_from_supabase() -> dict:
     log.info("🔄 Syncing products from Supabase …")
     sync_status["errors"] = []
 
+    # Ambil data produk (tanpa join, lebih reliable)
     products = _supabase_get("products?select=id,name,ai_label,image_url&order=name")
     if products is None:
         err = "Failed to fetch products from Supabase"
@@ -280,33 +288,60 @@ def sync_from_supabase() -> dict:
         embed_db.upsert_label_only(pid, name, ai_label)
         log.info(f"  [YOLO] Registered '{ai_label}' → '{name}'")
 
-        # ── Jika ada image_url dan belum ada embedding, compute DINOv2 ──
-        existing_embs = embed_db.db.get(pid, {}).get("embeddings", [])
+        # ── Kumpulkan semua URL gambar dari product_images (query terpisah) ──
+        urls = []
         if image_url:
-            if existing_embs:
+            urls.append(image_url)
+
+        pimgs = _supabase_get(f"product_images?product_id=eq.{pid}&select=image_url")
+        if pimgs:
+            for pimg in pimgs:
+                url = pimg.get("image_url")
+                if url:
+                    urls.append(url)
+
+        urls = list(dict.fromkeys(urls))  # hapus duplikat, pertahankan urutan
+        log.info(f"  [DINO] '{name}' memiliki {len(urls)} gambar total (1 produk + {len(urls)-1 if urls else 0} product_images)")
+
+        existing_embs = embed_db.db.get(pid, {}).get("embeddings", [])
+
+        if urls:
+            # Hanya skip jika jumlah embedding sudah sama dengan jumlah gambar
+            if len(existing_embs) == len(urls):
                 log.info(f"  [DINO] '{name}' sudah punya {len(existing_embs)} embedding, skip re-download")
                 with_emb += 1
                 continue
 
-            log.info(f"  [DINO] Downloading image for '{name}' …")
-            bgr = _download_image(image_url)
-            if bgr is None:
-                log.warning(f"  [DINO] Gagal download image untuk '{name}'")
-                no_img += 1
-                continue
+            log.info(f"  [DINO] Processing {len(urls)} images for '{name}' (existing: {len(existing_embs)}) …")
+            new_embs = []
 
-            try:
-                pil = _bgr2pil(bgr)
-                emb = _extract_embedding(pil)
-                embed_db.upsert(pid, name, ai_label, [emb.tolist()])
+            for url in urls:
+                bgr = _download_image(url)
+                if bgr is None:
+                    log.warning(f"  [DINO] Gagal download: {url[:80]}")
+                    continue
+                try:
+                    emb = _extract_embedding(_bgr2pil(bgr))
+                    new_embs.append(emb.tolist())
+                except Exception as e:
+                    log.error(f"  [DINO] Error embedding: {e}")
+                    sync_status["errors"].append(f"{name}: {e}")
+
+            if new_embs:
+                embed_db.db[pid] = {
+                    "id":         pid,
+                    "name":       name,
+                    "label":      ai_label.lower().strip(),
+                    "embeddings": new_embs,
+                }
                 with_emb += 1
-                log.info(f"  [DINO] ✅ Embedding computed untuk '{name}'")
-            except Exception as e:
-                log.error(f"  [DINO] Error embedding '{name}': {e}")
-                sync_status["errors"].append(f"{name}: {e}")
+                log.info(f"  [DINO] ✅ {len(new_embs)}/{len(urls)} embeddings berhasil untuk '{name}'")
+            else:
+                no_img += 1
+                log.warning(f"  [DINO] '{name}' gagal mendapatkan embedding dari semua gambar")
         else:
             no_img += 1
-            log.info(f"  [DINO] '{name}' tidak punya image_url — hanya YOLO-World")
+            log.info(f"  [DINO] '{name}' tidak punya gambar — hanya YOLO-World")
 
     embed_db._rebuild_classes()
     embed_db.save()
@@ -433,57 +468,66 @@ async def detect(req: DetectRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
 
-    if not embed_db.yolo_classes or embed_db.yolo_classes == ["product", "item"]:
+    if not embed_db.db:
         return {"success": False, "message": "Belum ada produk terdaftar. Sync dari Supabase terlebih dahulu via POST /sync"}
+
+    has_any_embedding = any(len(e.get("embeddings", [])) > 0 for e in embed_db.db.values())
 
     # ── Step 1: YOLO-World ─────────────────────────────────────────────────
     yolo_model.set_classes(embed_db.yolo_classes)
     results = yolo_model(_bgr2pil(bgr), verbose=False, conf=SCORE_THR)
 
-    if not results or len(results[0].boxes) == 0:
-        return {"success": False, "message": "Tidak ada objek terdeteksi oleh YOLO-World"}
+    best_box  = None
+    best_conf = 0.0
+    yolo_label = None
+    pid_by_label, entry_by_label = None, None
 
-    boxes  = results[0].boxes
-    confs  = boxes.conf.cpu().numpy()
-    xyxy   = boxes.xyxy.cpu().numpy()
-    cls_ids= boxes.cls.cpu().int().numpy()
+    if results and len(results[0].boxes) > 0:
+        boxes   = results[0].boxes
+        confs   = boxes.conf.cpu().numpy()
+        xyxy    = boxes.xyxy.cpu().numpy()
+        cls_ids = boxes.cls.cpu().int().numpy()
 
-    best_i    = int(np.argmax(confs))
-    best_box  = xyxy[best_i].tolist()
-    best_conf = float(confs[best_i])
-    best_cls  = int(cls_ids[best_i])
-    yolo_label= embed_db.yolo_classes[best_cls] if best_cls < len(embed_db.yolo_classes) else "unknown"
+        best_i    = int(np.argmax(confs))
+        best_box  = xyxy[best_i].tolist()
+        best_conf = float(confs[best_i])
+        best_cls  = int(cls_ids[best_i])
+        yolo_label = embed_db.yolo_classes[best_cls] if best_cls < len(embed_db.yolo_classes) else "unknown"
 
-    log.info(f"[YOLO] '{yolo_label}' conf={best_conf:.2f}")
+        log.info(f"[YOLO] '{yolo_label}' conf={best_conf:.2f}")
+        pid_by_label, entry_by_label = embed_db.find_by_label(yolo_label)
+    else:
+        log.info(f"[YOLO] Tidak ada deteksi — mencoba DINOv2 pada full image")
 
-    # ── Cari product entry berdasarkan YOLO label ──────────────────────────
-    pid_by_label, entry_by_label = embed_db.find_by_label(yolo_label)
-
-    # ── Step 2: DINOv2 (jika ada embedding) ───────────────────────────────
-    has_any_embedding = any(len(e.get("embeddings", [])) > 0 for e in embed_db.db.values())
-
+    # ── Step 2: DINOv2 ────────────────────────────────────────────────────
     if has_any_embedding:
-        crop = _crop_box(bgr, best_box)
-        if crop.size == 0:
+        # Crop ke bbox YOLO jika ada, kalau tidak pakai full image
+        if best_box is not None:
+            crop = _crop_box(bgr, best_box)
+            if crop.size == 0:
+                crop = bgr
+        else:
             crop = bgr
-        query_emb             = _extract_embedding(_bgr2pil(crop))
+
+        query_emb              = _extract_embedding(_bgr2pil(crop))
         pid, entry, similarity = embed_db.find_best_match(query_emb)
         log.info(f"[DINO] Best match: '{entry['name'] if entry else 'none'}' sim={similarity:.3f}")
 
         if similarity >= SIMILARITY_THR:
+            source = "yolo+dino" if best_box is not None else "dino-only"
             return {
                 "success":      True,
-                "source":       "yolo+dino",
+                "source":       source,
                 "product_id":   pid,
                 "label":        entry["label"],
                 "product_name": entry["name"],
                 "confidence":   best_conf,
                 "similarity":   similarity,
-                "bbox":         best_box,
+                "bbox":         best_box or [],
                 "product": {"id": pid, "name": entry["name"], "label": entry["label"]},
             }
         else:
-            log.info(f"[DINO] Similarity {similarity:.2f} < threshold {SIMILARITY_THR} — fallback to YOLO label")
+            log.info(f"[DINO] Similarity {similarity:.2f} < threshold {SIMILARITY_THR}")
 
     # ── Fallback: gunakan YOLO label langsung ─────────────────────────────
     if pid_by_label and entry_by_label:
@@ -495,17 +539,16 @@ async def detect(req: DetectRequest):
             "product_name": entry_by_label["name"],
             "confidence":   best_conf,
             "similarity":   None,
-            "bbox":         best_box,
+            "bbox":         best_box or [],
             "product": {"id": pid_by_label, "name": entry_by_label["name"], "label": yolo_label},
         }
 
     return {
         "success":    False,
-        "source":     "yolo-world",
-        "label":      yolo_label,
+        "source":     "none",
+        "message":    "Tidak ada produk yang cocok ditemukan",
         "confidence": best_conf,
-        "bbox":       best_box,
-        "message":    f"Label '{yolo_label}' terdeteksi tapi tidak ada produk cocok di DB",
+        "similarity": None,
     }
 
 

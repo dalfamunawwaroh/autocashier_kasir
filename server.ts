@@ -23,6 +23,9 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+  // Expose local upload folder so vision_server.py can download product images
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
   console.log("Database: Supabase (PostgreSQL)");
 
   // --- API ROUTES ---
@@ -64,7 +67,7 @@ async function startServer() {
       const { image } = req.body;
       if (!image) return res.status(400).json({ success: false, message: "No image provided" });
 
-      // ── Primary: Vision Server (YOLO-World + DINOv2) ──
+      // ── Vision Server (YOLO-World + DINOv2) — satu-satunya sumber deteksi ──
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -110,70 +113,28 @@ async function startServer() {
             }
           }
 
-          return res.json({
-            success: true,
-            source,
-            label,
-            confidence,
-            similarity,
-            bbox,
-            product,
-          });
+          return res.json({ success: true, source, label, confidence, similarity, bbox, product });
         }
 
         // Vision server responded but no detection
         console.log(`[VISION] No detection: ${visionData.message || "unknown"}`);
-        return res.json({ success: false, message: visionData.message || "No objects detected", source: "yolo+dino" });
+        return res.json({ success: false, message: visionData.message || "Tidak ada objek terdeteksi", source: "yolo+dino" });
 
       } catch (visionErr: any) {
-        if (visionErr.name === "AbortError") {
-          console.warn("[VISION] Timeout — vision server did not respond in time");
-        } else {
-          console.warn(`[VISION] Vision server unreachable: ${visionErr.message}`);
-        }
-        // Fall through to Roboflow fallback
+        const isTimeout = visionErr.name === "AbortError";
+        const msg = isTimeout
+          ? "Vision server timeout — pastikan vision server sudah berjalan"
+          : "Vision server tidak dapat dijangkau — jalankan: npm run dev:all";
+        console.warn(`[VISION] ❌ ${msg}`);
+        return res.status(503).json({ success: false, message: msg, source: "vision-server-offline" });
       }
 
-      // ── Fallback: Roboflow (if vision server is down) ──
-      const roboflowKey = process.env.ROBOFLOW_API_KEY;
-      if (roboflowKey) {
-        try {
-          console.log(`[FALLBACK] Trying Roboflow…`);
-          const base64Data = image.includes(",") ? image.split(",")[1] : image;
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
-          const rfRes = await fetch(`https://detect.roboflow.com/autocashier/1?api_key=${roboflowKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: base64Data,
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          const rfData = await rfRes.json();
-          if (rfRes.ok && rfData.predictions?.length > 0) {
-            const primary    = rfData.predictions.sort((a: any, b: any) => b.confidence - a.confidence)[0];
-            const label      = (primary.class || "unknown") as string;
-            const confidence = primary.confidence || 0;
-            const x1 = (primary.x || 0) - (primary.width || 0) / 2;
-            const y1 = (primary.y || 0) - (primary.height || 0) / 2;
-            const x2 = (primary.x || 0) + (primary.width || 0) / 2;
-            const y2 = (primary.y || 0) + (primary.height || 0) / 2;
-            console.log(`[FALLBACK] Roboflow detected: '${label}' ${(confidence*100).toFixed(1)}%`);
-            const { data: product } = await supabase.from("products").select("*")
-              .or(`ai_label.eq.${label},sku.eq.${label},name.ilike.%${label}%`).maybeSingle();
-            return res.json({ success: true, source: "roboflow-fallback", label, confidence, bbox: [x1,y1,x2,y2], product });
-          }
-        } catch (rfErr: any) {
-          console.error(`[FALLBACK] Roboflow error: ${rfErr.message}`);
-        }
-      }
-
-      res.json({ success: false, message: "No objects detected" });
     } catch (error) {
       console.error("[AI] Detection endpoint error:", error);
       res.status(500).json({ success: false, message: "Detection system error" });
     }
   });
+
 
   // 3b. Vision Server — Register product reference images
   app.post("/api/vision/register", async (req, res) => {
