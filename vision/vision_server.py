@@ -123,8 +123,8 @@ class EmbedDB:
         self.path.write_text(json.dumps(self.db, indent=2), encoding="utf-8")
 
     def _rebuild_classes(self):
-        """Rebuild YOLO class list strictly dari semua produk terdaftar di database."""
-        classes = []
+        """Rebuild YOLO class list dari semua produk ditambah generic classes untuk membantu deteksi bounding box."""
+        classes = ["product", "item", "snack", "bottle", "box", "drink", "can", "cup", "packaging"]
         self.class_to_pid = {}
         for pid, entry in self.db.items():
             # Ganti underscore dengan spasi agar YOLO-World lebih paham
@@ -133,7 +133,7 @@ class EmbedDB:
             if label and label not in classes:
                 classes.append(label)
                 self.class_to_pid[label] = pid
-        self.yolo_classes = classes if classes else ["product", "item"]
+        self.yolo_classes = classes
         log.info(f"YOLO classes ({len(self.yolo_classes)}): {self.yolo_classes}")
 
     def upsert(self, pid: str, name: str, label: str, embeddings: List[List[float]]):
