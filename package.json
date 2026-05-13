@@ -4,12 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev:all": "concurrently \"npm run dev\" \"npm run vision\"",
-    "dev": "tsx server.ts",
-    "vision": ".venv\\Scripts\\python vision_server.py",
-    "start": "node server.ts",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "tsx backend/server.ts",
+    "vision": "cd vision && .venv\\Scripts\\python vision_server.py",
+    "start": "node backend/server.ts",
+    "build": "vite build -c frontend/vite.config.ts",
+    "preview": "vite preview -c frontend/vite.config.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

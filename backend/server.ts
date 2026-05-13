@@ -4,10 +4,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { supabase } from "./src/lib/supabase.js";
+import { supabase } from "../frontend/src/lib/supabase.js";
 import bcrypt from "bcryptjs";
 
-dotenv.config();
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env') });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +24,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Expose local upload folder so vision_server.py can download product images
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   console.log("Database: Supabase (PostgreSQL)");
 
@@ -277,7 +277,7 @@ async function startServer() {
   // Vite / Static Assets
   if (process.env.NODE_ENV !== "production") {
     try {
-      const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa", root: __dirname });
+      const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa", root: path.join(__dirname, '../frontend') });
       app.use(vite.middlewares);
       console.log("Vite: Middleware initialized");
     } catch (e) {
@@ -285,7 +285,7 @@ async function startServer() {
       throw e;
     }
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), 'frontend/dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }

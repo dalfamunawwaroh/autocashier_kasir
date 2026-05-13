@@ -59,19 +59,22 @@ log.info(f"Device: {DEVICE} | YOLO threshold: {SCORE_THR} | DINOv2 threshold: {S
 # ─────────────────────────────────────────────────────────────────────────────
 # Load .env (jika ada)
 # ─────────────────────────────────────────────────────────────────────────────
-def _load_env(filepath=".env"):
-    try:
-        for line in Path(filepath).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip())
-        # Re-read after loading
-        global SUPABASE_URL, SUPABASE_KEY
-        SUPABASE_URL = os.environ.get("SUPABASE_URL", SUPABASE_URL)
-        SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", SUPABASE_KEY)
-    except FileNotFoundError:
-        pass
+# ─────────────────────────────────────────────────────────────────────────────
+def _load_env(filepaths=[".env", "../.env"]):
+    for filepath in filepaths:
+        try:
+            for line in Path(filepath).read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+            # Re-read after loading
+            global SUPABASE_URL, SUPABASE_KEY
+            SUPABASE_URL = os.environ.get("SUPABASE_URL", SUPABASE_URL)
+            SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", SUPABASE_KEY)
+            break # Stop after finding the first valid .env file
+        except FileNotFoundError:
+            continue
 
 _load_env()
 
@@ -265,6 +268,8 @@ def sync_from_supabase() -> dict:
         sync_status["errors"].append(err)
         return sync_status
 
+    product_images_data = _supabase_get("product_images?select=product_id,storage_path") or []
+
     # Hapus produk lama dari DB lokal (vision_db.json) yang sudah tidak ada di Supabase
     valid_pids = [str(p.get("id", "")) for p in products]
     for existing_pid in list(embed_db.db.keys()):
@@ -295,6 +300,9 @@ def sync_from_supabase() -> dict:
         
         # Ambil daftar gambar dari product_images
         image_urls = image_map.get(pid, [])
+        primary_img = p.get("image_url")
+        if primary_img and primary_img not in image_urls:
+            image_urls.insert(0, primary_img)
 
         if not pid or not ai_label:
             log.warning(f"Skipping product with missing id/label: {p}")
@@ -304,30 +312,34 @@ def sync_from_supabase() -> dict:
         embed_db.upsert_label_only(pid, name, ai_label)
         log.info(f"  [YOLO] Registered '{ai_label}' → '{name}'")
 
-        # ── Jika ada image_url dan belum ada embedding, compute DINOv2 ──
+        # ── Jika ada image_urls dan belum ada embedding, compute DINOv2 ──
         existing_embs = embed_db.db.get(pid, {}).get("embeddings", [])
-        if image_url:
+        if image_urls:
             if existing_embs:
                 log.info(f"  [DINO] '{name}' sudah punya {len(existing_embs)} embedding, skip re-download")
                 with_emb += 1
                 continue
 
-            log.info(f"  [DINO] Downloading image for '{name}' …")
-            bgr = _download_image(image_url)
-            if bgr is None:
+            new_embs = []
+            for url in image_urls:
+                log.info(f"  [DINO] Downloading image for '{name}' …")
+                bgr = _download_image(url)
+                if bgr is not None:
+                    try:
+                        pil = _bgr2pil(bgr)
+                        emb = _extract_embedding(pil)
+                        new_embs.append(emb.tolist())
+                    except Exception as e:
+                        log.error(f"  [DINO] Error embedding '{name}': {e}")
+                        sync_status["errors"].append(f"{name}: {e}")
+            
+            if new_embs:
+                embed_db.upsert(pid, name, ai_label, new_embs)
+                with_emb += 1
+                log.info(f"  [DINO] ✅ {len(new_embs)} Embedding computed untuk '{name}'")
+            else:
                 log.warning(f"  [DINO] Gagal download image untuk '{name}'")
                 no_img += 1
-                continue
-
-            try:
-                pil = _bgr2pil(bgr)
-                emb = _extract_embedding(pil)
-                embed_db.upsert(pid, name, ai_label, [emb.tolist()])
-                with_emb += 1
-                log.info(f"  [DINO] ✅ Embedding computed untuk '{name}'")
-            except Exception as e:
-                log.error(f"  [DINO] Error embedding '{name}': {e}")
-                sync_status["errors"].append(f"{name}: {e}")
         else:
             no_img += 1
             log.info(f"  [DINO] '{name}' tidak punya image_url — hanya YOLO-World")
