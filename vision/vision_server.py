@@ -46,8 +46,8 @@ log = logging.getLogger("vision")
 YOLO_MODEL      = os.environ.get("YOLO_MODEL", "yolov8s-worldv2.pt")
 DINO_MODEL      = os.environ.get("DINO_MODEL", "facebook/dinov2-base")
 EMBED_DB_PATH   = Path("vision_embeddings.json")
-SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.20"))
-SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.50"))
+SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.15"))
+SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.40"))
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Supabase config (dari .env atau environment)
@@ -123,17 +123,13 @@ class EmbedDB:
         self.path.write_text(json.dumps(self.db, indent=2), encoding="utf-8")
 
     def _rebuild_classes(self):
-        """Rebuild YOLO class list dari semua produk ditambah generic classes untuk membantu deteksi bounding box."""
-        classes = ["product", "item", "snack", "bottle", "box", "drink", "can", "cup", "packaging"]
-        self.class_to_pid = {}
-        for pid, entry in self.db.items():
-            # Ganti underscore dengan spasi agar YOLO-World lebih paham
-            label = entry.get("label", "").strip().replace("_", " ")
-            entry["label"] = label
-            if label and label not in classes:
-                classes.append(label)
-                self.class_to_pid[label] = pid
-        self.yolo_classes = classes
+        """Gabungkan generic classes dengan ai_label spesifik dari database."""
+        base_classes = ["product", "item", "snack", "bottle", "box", "drink", "can", "cup", "packaging"]
+        db_labels = {e.get("label").strip().lower() for e in self.db.values() if e.get("label")}
+        
+        # Hindari duplikasi
+        combined = list(dict.fromkeys(base_classes + list(db_labels)))
+        self.yolo_classes = combined
         log.info(f"YOLO classes ({len(self.yolo_classes)}): {self.yolo_classes}")
 
     def upsert(self, pid: str, name: str, label: str, embeddings: List[List[float]]):
@@ -214,7 +210,7 @@ def _download_image(url: str, timeout: int = 10) -> Optional[np.ndarray]:
         log.warning(f"Download failed ({url[:60]}): {e}")
         return None
 
-def _crop_box(img: np.ndarray, box: list, pad: float = 0.05) -> np.ndarray:
+def _crop_box(img: np.ndarray, box: list, pad: float = 0.10) -> np.ndarray:
     h, w = img.shape[:2]
     x1, y1, x2, y2 = [int(v) for v in box]
     px, py = int((x2-x1)*pad), int((y2-y1)*pad)
@@ -516,6 +512,31 @@ async def detect(req: DetectRequest):
 
         if similarity >= SIMILARITY_THR:
             source = "yolo+dino" if best_box is not None else "dino-only"
+
+            # --- CUSTOM LOGIC: Ukuran Bounding Box untuk Produk Sama Beda Ukuran ---
+            if "tel u fresh" in entry["name"].lower() or "tel-u fresh" in entry["name"].lower():
+                if best_box is not None:
+                    x1, y1, x2, y2 = best_box
+                    area = (x2 - x1) * (y2 - y1)
+                    log.info(f"[SIZE CHECK] Area kotak Tel-U Fresh: {area:.2f} pixels")
+                    
+                    # THRESHOLD CALIBRATION: Anda mungkin perlu mengubah angka 40000 
+                    # di bawah ini sesuai dengan jarak kamera ke meja kasir.
+                    if area > 40000:
+                        target_name = "Tel-U Fresh 600ml"
+                    else:
+                        target_name = "Tel U Fresh 330ml"
+                    
+                    # Timpa hasil DINO dengan produk ukuran yang benar
+                    if entry["name"].lower() != target_name.lower():
+                        for p_id, p_entry in embed_db.db.items():
+                            if p_entry["name"].lower() == target_name.lower():
+                                pid = p_id
+                                entry = p_entry
+                                log.info(f"[SIZE CHECK] Override ke: {target_name} (karena area > 40000? {area > 40000})")
+                                break
+            # ------------------------------------------------------------------------
+
             return {
                 "success":      True,
                 "source":       source,
@@ -529,20 +550,6 @@ async def detect(req: DetectRequest):
             }
         else:
             log.info(f"[DINO] Similarity {similarity:.2f} < threshold {SIMILARITY_THR}")
-
-    # ── Fallback: gunakan YOLO label langsung ─────────────────────────────
-    if pid_by_label and entry_by_label:
-        return {
-            "success":      True,
-            "source":       "yolo-world",
-            "product_id":   pid_by_label,
-            "label":        yolo_label,
-            "product_name": entry_by_label["name"],
-            "confidence":   best_conf,
-            "similarity":   None,
-            "bbox":         best_box or [],
-            "product": {"id": pid_by_label, "name": entry_by_label["name"], "label": yolo_label},
-        }
 
     return {
         "success":    False,
