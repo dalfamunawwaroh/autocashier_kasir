@@ -235,13 +235,15 @@ export default function CameraScannerPage() {
     setIsScanning(true);
 
     try {
-      // Capture frame from video
+      // Capture frame dari video — downscale ke 480px untuk kecepatan transfer
+      const CAPTURE_W = 480;
+      const CAPTURE_H = 270;
       const canvas = canvasRef.current || document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width  = CAPTURE_W;
+      canvas.height = CAPTURE_H;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      ctx.drawImage(videoRef.current, 0, 0);
+      ctx.drawImage(videoRef.current, 0, 0, CAPTURE_W, CAPTURE_H);
       const base64Image = canvas.toDataURL('image/jpeg', 0.7);
 
       // Send to backend /api/detect
@@ -255,23 +257,41 @@ export default function CameraScannerPage() {
 
       if (data.success && data.label) {
         console.log(`[SCAN] Detected: ${data.label} (${(data.confidence * 100).toFixed(1)}%) via ${data.source}`);
+        console.log(`[SCAN] bbox raw:`, data.bbox, `| displayW=${videoRef.current?.clientWidth} displayH=${videoRef.current?.clientHeight}`);
 
-        // Calculate box position relative to video display
+        // Bbox dari vision server sudah ternormalisasi [0,1] relatif thd gambar input.
+        // Cukup kalikan dengan ukuran display video yang sebenarnya terlihat (object-cover).
         const videoEl = videoRef.current;
         const displayW = videoEl.clientWidth;
         const displayH = videoEl.clientHeight;
-        const videoW = videoEl.videoWidth;
-        const videoH = videoEl.videoHeight;
-        const scaleX = displayW / videoW;
-        const scaleY = displayH / videoH;
 
-        const bbox = data.bbox || [0, 0, 100, 100];
-        const boxForDisplay = {
-          x: bbox[0] * scaleX,
-          y: bbox[1] * scaleY,
-          w: (bbox[2] - bbox[0]) * scaleX,
-          h: (bbox[3] - bbox[1]) * scaleY
-        };
+        // Hitung area render sebenarnya untuk CSS object-cover
+        // Capture: 480x270 (aspect 16:9), display bisa beda aspek rasio
+        const captureAspect = CAPTURE_W / CAPTURE_H;
+        const displayAspect = displayW / displayH;
+        let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
+        if (displayAspect > captureAspect) {
+          // Display lebih lebar → video fill width, height overflow (center)
+          renderedW = displayW;
+          renderedH = displayW / captureAspect;
+          offsetX = 0;
+          offsetY = (displayH - renderedH) / 2;
+        } else {
+          // Display lebih tinggi → video fill height, width overflow (center)
+          renderedH = displayH;
+          renderedW = displayH * captureAspect;
+          offsetX = (displayW - renderedW) / 2;
+          offsetY = 0;
+        }
+
+        const bbox = data.bbox as number[]; // [x1,y1,x2,y2] dalam [0,1]
+        const boxForDisplay = bbox && bbox.length === 4 ? {
+          x: bbox[0] * renderedW + offsetX,
+          y: bbox[1] * renderedH + offsetY,
+          w: (bbox[2] - bbox[0]) * renderedW,
+          h: (bbox[3] - bbox[1]) * renderedH
+        } : null;
+        console.log(`[SCAN] boxForDisplay:`, boxForDisplay);
 
         // Pause scanning interval
         if (scanIntervalRef.current) {
@@ -356,7 +376,7 @@ export default function CameraScannerPage() {
       {!isCameraReady && !initError && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 text-white">
           <Loader2 className="w-12 h-12 animate-spin text-[#0047FF] mb-6" />
-          <p className="font-black tracking-[0.4em] uppercase text-xs italic">Initializing Camera...</p>
+          <p className="font-black tracking-[0.4em] uppercase text-xs italic">Menyiapkan Kamera...</p>
         </div>
       )}
 
@@ -394,7 +414,7 @@ export default function CameraScannerPage() {
           {/* Instruction text */}
           <div className="absolute bottom-[30%] flex items-center gap-2 text-white/40 text-xs font-bold uppercase tracking-widest">
             <Camera className="w-4 h-4" />
-            Arahkan produk ke kamera
+            Arahkan barang ke kamera
           </div>
         </div>
       )}
@@ -407,7 +427,7 @@ export default function CameraScannerPage() {
             transition={{ duration: 1, repeat: Infinity }}
             className="flex items-center gap-2 bg-[#0047FF]/20 border border-[#0047FF]/40 px-5 py-2.5 rounded-full text-[#0047FF] text-xs font-black uppercase tracking-widest"
           >
-            <Scan className="w-4 h-4 animate-spin" /> Menganalisis...
+            <Scan className="w-4 h-4 animate-spin" /> Melihat barang...
           </motion.div>
         </div>
       )}
@@ -447,16 +467,9 @@ export default function CameraScannerPage() {
                 <span className="opacity-60 ml-1">{(scanState.confidence * 100).toFixed(0)}%</span>
               )}
               {scanState.similarity != null && (
-                <span className="opacity-50 ml-0.5 text-[9px]">sim:{(scanState.similarity * 100).toFixed(0)}%</span>
+                <span className="opacity-50 ml-0.5 text-[9px]">Akurasi:{(scanState.similarity * 100).toFixed(0)}%</span>
               )}
             </div>
-            {/* Source badge below the box */}
-            {scanState.source && (
-              <div className="absolute -bottom-8 left-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-black/60 text-white/50 flex items-center gap-1">
-                {scanState.source.includes('dino') ? <Cpu className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
-                {scanState.source}
-              </div>
-            )}
 
             {/* Progress fill for DETECTED state */}
             {scanState.status === 'DETECTED' && (
@@ -476,7 +489,7 @@ export default function CameraScannerPage() {
       {/* Header */}
       <div className="absolute top-0 inset-x-0 p-8 z-20">
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
-          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">JagoAI <span className="text-[#0047FF]">VISION</span></div>
+          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">Koperasi Giat <span className="text-[#0047FF]">SCANNER</span></div>
 
           {/* Vision pipeline & status badges */}
           <div className="flex items-center gap-3">
@@ -502,9 +515,9 @@ export default function CameraScannerPage() {
               {visionOnline === null ? <Loader2 className="w-3 h-3 animate-spin" /> :
                visionOnline ? <Cpu className="w-3 h-3" /> :
                <WifiOff className="w-3 h-3" />}
-              {visionOnline === null ? 'Checking…' :
-               visionOnline ? `YOLO+DINOv2` :
-               'Offline'}
+              {visionOnline === null ? 'Mengecek…' :
+               visionOnline ? `Sistem Pintar` :
+               'Terputus'}
               {visionOnline && visionProducts > 0 && (
                 <span className="flex items-center gap-1 opacity-70">
                   <Database className="w-3 h-3" />{visionProducts}
@@ -521,7 +534,7 @@ export default function CameraScannerPage() {
                 className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border border-[#0047FF]/40 text-[#0047FF] bg-[#0047FF]/10 hover:bg-[#0047FF]/20 transition-all disabled:opacity-40"
               >
                 <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing…' : 'Sync DB'}
+                {isSyncing ? 'Memperbarui…' : 'Perbarui Data'}
               </button>
             )}
 
@@ -533,10 +546,10 @@ export default function CameraScannerPage() {
                 scanState.status === 'SCANNING' ? 'bg-[#0047FF] animate-pulse' :
                 'bg-slate-500'
               }`} />
-              {scanState.status === 'SCANNING' ? 'SCANNING' :
-               scanState.status === 'DETECTED' ? 'LOCKED' :
-               scanState.status === 'CONFIRMED' ? 'CONFIRMED' :
-               'IDLE'}
+              {scanState.status === 'SCANNING' ? 'MENCARI BARANG' :
+               scanState.status === 'DETECTED' ? 'MENCOCOKKAN' :
+               scanState.status === 'CONFIRMED' ? 'DITEMUKAN' :
+               'SIAP'}
             </div>
           </div>
         </div>
@@ -546,13 +559,13 @@ export default function CameraScannerPage() {
       <div className="absolute left-8 bottom-8 z-20 w-85 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-[45px] flex flex-col max-h-[480px] text-white shadow-2xl overflow-hidden">
         <div className="p-10 pb-5">
           <div className="flex items-center gap-3 opacity-50 text-[10px] font-black uppercase tracking-[0.3em] mb-4">
-            <ShoppingBag className="w-4 h-4" /> Keranjang ({totalQty})
+            <ShoppingBag className="w-4 h-4" /> Daftar Belanja ({totalQty})
           </div>
           <div className="h-[1px] bg-white/5 w-full" />
         </div>
         <div className="px-10 flex-1 overflow-y-auto custom-scrollbar space-y-6 py-2">
           {detectedItems.length === 0 ? (
-            <div className="text-xs text-white/20 italic font-bold">Belum ada barang terdeteksi...</div>
+            <div className="text-xs text-white/20 italic font-bold">Silakan arahkan barang ke kamera...</div>
           ) : (
             detectedItems.map((item, idx) => (
               <motion.div initial={{ x: -10, opacity: 0 }} animate={{ x: 0, opacity: 1 }} key={idx} className="flex justify-between items-center group">
@@ -568,7 +581,7 @@ export default function CameraScannerPage() {
         <div className="p-10 pt-5">
           <div className="h-[1px] bg-slate-200 dark:bg-white/5 w-full mb-8" />
           <div className="flex justify-between items-end">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Total Belanja</span>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Total Harga</span>
             <span className="text-4xl font-black text-white italic tracking-tighter leading-none">Rp{totalPrice.toLocaleString('id-ID')}</span>
           </div>
         </div>

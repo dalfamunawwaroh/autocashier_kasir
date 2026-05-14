@@ -103,10 +103,10 @@ class EmbedDB:
     def __init__(self, path: Path):
         self.path = path
         self.db: dict = {}
-        # Index untuk YOLO: {product_id: label}
         self.yolo_classes: List[str] = []
-        # product_id terurut sesuai yolo_classes (penting untuk mapping cls idx)
-        self.class_to_pid: dict = {}
+        # ── Cache untuk vectorized similarity search ──────────────────────
+        self._emb_matrix: Optional[np.ndarray] = None  # shape (N, D) normalized
+        self._emb_index:  List[str]            = []    # pid per row
         self._load()
 
     def _load(self):
@@ -123,14 +123,32 @@ class EmbedDB:
         self.path.write_text(json.dumps(self.db, indent=2), encoding="utf-8")
 
     def _rebuild_classes(self):
-        """Gabungkan generic classes dengan ai_label spesifik dari database."""
-        base_classes = ["product", "item", "snack", "bottle", "box", "drink", "can", "cup", "packaging"]
-        db_labels = {e.get("label").strip().lower() for e in self.db.values() if e.get("label")}
-        
-        # Hindari duplikasi
-        combined = list(dict.fromkeys(base_classes + list(db_labels)))
-        self.yolo_classes = combined
-        log.info(f"YOLO classes ({len(self.yolo_classes)}): {self.yolo_classes}")
+        """YOLO hanya pakai generic classes — tugasnya hanya crop region produk.
+        Identifikasi produk sepenuhnya dilakukan oleh DINOv2."""
+        self.yolo_classes = [
+            "product", "item", "snack", "bottle", "box",
+            "drink", "can", "cup", "packaging", "food", "object"
+        ]
+        self._rebuild_emb_matrix()
+
+    def _rebuild_emb_matrix(self):
+        """Pre-compute normalized embedding matrix untuk vectorized cosine similarity.
+        Dipanggil sekali saat DB berubah, bukan per-frame."""
+        rows, index = [], []
+        for pid, entry in self.db.items():
+            for emb in entry.get("embeddings", []):
+                rows.append(emb)
+                index.append(pid)
+        if rows:
+            mat = np.array(rows, dtype=np.float32)
+            norms = np.linalg.norm(mat, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            self._emb_matrix = mat / norms  # normalize tiap baris
+            self._emb_index  = index
+            log.info(f"Embedding matrix: {self._emb_matrix.shape} ({len(set(index))} produk, {len(index)} vectors)")
+        else:
+            self._emb_matrix = None
+            self._emb_index  = []
 
     def upsert(self, pid: str, name: str, label: str, embeddings: List[List[float]]):
         existing_embs = self.db.get(pid, {}).get("embeddings", [])
@@ -151,16 +169,22 @@ class EmbedDB:
             "label":      label.lower().strip(),
             "embeddings": existing.get("embeddings", []),
         }
-        self._rebuild_classes()
 
     def find_best_match(self, query_emb: np.ndarray):
-        best_id, best_sim, best_entry = None, -1.0, None
-        for pid, entry in self.db.items():
-            for ref in entry.get("embeddings", []):
-                sim = _cosine(query_emb, np.array(ref, dtype=np.float32))
-                if sim > best_sim:
-                    best_sim, best_id, best_entry = sim, pid, entry
-        return best_id, best_entry, best_sim
+        """Vectorized cosine similarity — 1 matmul, bukan N loop."""
+        if self._emb_matrix is None or len(self._emb_index) == 0:
+            return None, None, -1.0
+        q = query_emb.flatten().astype(np.float32)
+        q_norm = np.linalg.norm(q)
+        if q_norm == 0:
+            return None, None, -1.0
+        q = q / q_norm
+        sims       = self._emb_matrix @ q          # (N,) — satu matmul
+        best_i     = int(np.argmax(sims))
+        best_sim   = float(sims[best_i])
+        best_pid   = self._emb_index[best_i]
+        best_entry = self.db.get(best_pid)
+        return best_pid, best_entry, best_sim
 
     def find_by_label(self, label: str):
         label = label.lower().strip()
@@ -264,7 +288,7 @@ def sync_from_supabase() -> dict:
         sync_status["errors"].append(err)
         return sync_status
 
-    product_images_data = _supabase_get("product_images?select=product_id,storage_path") or []
+    product_images_data = _supabase_get("product_images?select=product_id,image_url") or []
 
     # Hapus produk lama dari DB lokal (vision_db.json) yang sudah tidak ada di Supabase
     valid_pids = [str(p.get("id", "")) for p in products]
@@ -274,11 +298,12 @@ def sync_from_supabase() -> dict:
             del embed_db.db[existing_pid]
 
     # Buat mapping product_id -> list of image_urls
+    # image_url di product_images sudah berupa full public URL Supabase Storage
     image_map = {}
     if product_images_data:
         for img in product_images_data:
             pid = str(img.get("product_id", ""))
-            url = img.get("storage_path")
+            url = img.get("image_url", "")
             if pid and url:
                 image_map.setdefault(pid, []).append(url)
 
@@ -470,33 +495,43 @@ async def detect(req: DetectRequest):
 
     has_any_embedding = any(len(e.get("embeddings", [])) > 0 for e in embed_db.db.values())
 
-    # ── Step 1: YOLO-World ─────────────────────────────────────────────────
-    yolo_model.set_classes(embed_db.yolo_classes)
-    results = yolo_model(_bgr2pil(bgr), verbose=False, conf=SCORE_THR)
+    # Ukuran gambar input (dari frontend, misal 480x270)
+    img_h, img_w = bgr.shape[:2]
 
-    best_box  = None
-    best_conf = 0.0
-    yolo_label = None
-    pid_by_label, entry_by_label = None, None
+    # ── Step 1: YOLO-World — hanya untuk deteksi region/crop ───────────────
+    # set_classes() TIDAK dipanggil di sini (sudah di-set saat startup/sync).
+    # Memanggil set_classes() tiap frame sangat mahal (re-encode text embeddings).
+    results = yolo_model(_bgr2pil(bgr), verbose=False, conf=SCORE_THR, imgsz=320)
+
+    best_box       = None   # koordinat piksel dalam ruang img_w x img_h
+    best_box_norm  = None   # koordinat ternormalisasi [x1,y1,x2,y2] dalam [0,1]
+    best_conf      = 0.0
 
     if results and len(results[0].boxes) > 0:
         boxes   = results[0].boxes
         confs   = boxes.conf.cpu().numpy()
-        xyxy    = boxes.xyxy.cpu().numpy()
         cls_ids = boxes.cls.cpu().int().numpy()
 
+        # boxes.xyxy sudah diskalakan ke ukuran gambar input oleh Ultralytics
+        xyxy = boxes.xyxy.cpu().numpy()
+
         best_i    = int(np.argmax(confs))
-        best_box  = xyxy[best_i].tolist()
+        best_box  = xyxy[best_i].tolist()          # piksel dalam img_w x img_h
         best_conf = float(confs[best_i])
         best_cls  = int(cls_ids[best_i])
         yolo_label = embed_db.yolo_classes[best_cls] if best_cls < len(embed_db.yolo_classes) else "unknown"
 
-        log.info(f"[YOLO] '{yolo_label}' conf={best_conf:.2f}")
-        pid_by_label, entry_by_label = embed_db.find_by_label(yolo_label)
+        # Normalisasi ke [0,1] agar frontend bisa scale ke resolusi apapun
+        x1, y1, x2, y2 = best_box
+        best_box_norm = [
+            x1 / img_w, y1 / img_h,
+            x2 / img_w, y2 / img_h
+        ]
+        log.info(f"[YOLO] '{yolo_label}' conf={best_conf:.2f} bbox_norm={[round(v,3) for v in best_box_norm]}")
     else:
-        log.info(f"[YOLO] Tidak ada deteksi — mencoba DINOv2 pada full image")
+        log.info(f"[YOLO] Tidak ada deteksi — DINOv2 pakai full image")
 
-    # ── Step 2: DINOv2 ────────────────────────────────────────────────────
+    # ── Step 2: DINOv2 — satu-satunya identifier produk ───────────────────
     if has_any_embedding:
         # Crop ke bbox YOLO jika ada, kalau tidak pakai full image
         if best_box is not None:
@@ -518,22 +553,13 @@ async def detect(req: DetectRequest):
                 if best_box is not None:
                     x1, y1, x2, y2 = best_box
                     area = (x2 - x1) * (y2 - y1)
-                    log.info(f"[SIZE CHECK] Area kotak Tel-U Fresh: {area:.2f} pixels")
-                    
-                    # THRESHOLD CALIBRATION: Anda mungkin perlu mengubah angka 40000 
-                    # di bawah ini sesuai dengan jarak kamera ke meja kasir.
-                    if area > 40000:
-                        target_name = "Tel-U Fresh 600ml"
-                    else:
-                        target_name = "Tel U Fresh 330ml"
-                    
-                    # Timpa hasil DINO dengan produk ukuran yang benar
+                    log.info(f"[SIZE CHECK] Area Tel-U Fresh: {area:.2f} px²")
+                    target_name = "Tel-U Fresh 600ml" if area > 40000 else "Tel U Fresh 330ml"
                     if entry["name"].lower() != target_name.lower():
                         for p_id, p_entry in embed_db.db.items():
                             if p_entry["name"].lower() == target_name.lower():
-                                pid = p_id
-                                entry = p_entry
-                                log.info(f"[SIZE CHECK] Override ke: {target_name} (karena area > 40000? {area > 40000})")
+                                pid, entry = p_id, p_entry
+                                log.info(f"[SIZE CHECK] Override → {target_name}")
                                 break
             # ------------------------------------------------------------------------
 
@@ -545,7 +571,7 @@ async def detect(req: DetectRequest):
                 "product_name": entry["name"],
                 "confidence":   best_conf,
                 "similarity":   similarity,
-                "bbox":         best_box or [],
+                "bbox":         best_box_norm or [],   # [x1,y1,x2,y2] dalam [0,1]
                 "product": {"id": pid, "name": entry["name"], "label": entry["label"]},
             }
         else:

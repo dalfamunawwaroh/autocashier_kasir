@@ -124,7 +124,7 @@ async function startServer() {
         const isTimeout = visionErr.name === "AbortError";
         const msg = isTimeout
           ? "Vision server timeout — pastikan vision server sudah berjalan"
-          : "Vision server tidak dapat dijangkau — jalankan: npm run dev:all";
+          : "Vision server tidak dapat dijangkau — jalankan: npm run vision";
         console.warn(`[VISION] ❌ ${msg}`);
         return res.status(503).json({ success: false, message: msg, source: "vision-server-offline" });
       }

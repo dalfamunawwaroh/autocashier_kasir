@@ -294,7 +294,7 @@ export default function LandingPage() {
           
           <div className="flex flex-col sm:flex-row gap-6 justify-center relative z-10">
             <Link to="/scan" className="px-10 py-5 bg-brand-primary text-white rounded-2xl font-bold hover:shadow-lg transition-all active:scale-95">Mulai Percobaan</Link>
-            <button className="px-10 py-5 glass-card glass-card-hover rounded-2xl font-bold transition-all">Tentang JagoAI</button>
+            <a href="https://jagoai.dev" target="_blank" rel="noopener noreferrer" className="px-10 py-5 glass-card glass-card-hover rounded-2xl font-bold transition-all">Tentang JagoAI</a>
           </div>
         </div>
       </section>
