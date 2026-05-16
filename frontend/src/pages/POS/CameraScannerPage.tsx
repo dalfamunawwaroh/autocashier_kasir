@@ -34,17 +34,30 @@ function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
     e.preventDefault();
     if (!phone) return;
     setIsLoading(true);
-    setTimeout(() => {
-      if (phone === '081234') {
-        setIdentity({ name: 'Demo Member', role: 'kasir', phone }, true);
+    setErrorStatus(null);
+    
+    try {
+      const response = await fetch('/api/members/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      const data = await response.json();
+
+      if (data.success && data.isMember) {
+        setIdentity(data.user, true);
         navigate('/cart', { state: { items: cartItems } });
       } else {
         setErrorStatus(t.WA_NOT_FOUND);
         setIdentity({ name: 'Guest', role: 'kasir' }, false);
         setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 2000);
       }
+    } catch (err) {
+      console.error('Check member error:', err);
+      setErrorStatus('Gagal terhubung ke server');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleSkip = () => {

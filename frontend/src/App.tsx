@@ -3,11 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { Toaster } from 'sonner';
 import Navbar from './components/Layout/Navbar';
 import LandingPage from './pages/Landing/LandingPage';
-import LoginPage from './pages/Auth/LoginPage';
-import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage';
-import DashboardPage from './pages/Dashboard/DashboardPage';
-import AnalyticsPage from './pages/Analytics/AnalyticsPage';
-import ProfilePage from './pages/Profile/ProfilePage';
 import { useAppStore } from './store/useAppStore';
 
 // Deep Dark POS Vision Pages
@@ -17,19 +12,7 @@ import CartSummaryPage from './pages/POS/CartSummaryPage';
 import PaymentQRISPage from './pages/POS/PaymentQRISPage';
 import ReceiptVerificationPage from './pages/POS/ReceiptVerificationPage';
 
-const ProtectedRoute = ({ 
-  children, 
-  user, 
-  allowedRole 
-}: { 
-  children: React.ReactNode; 
-  user: { name: string; role: string } | null;
-  allowedRole?: string;
-}) => {
-  if (!user) return <Navigate to="/login" replace />;
-  if (allowedRole && user.role !== allowedRole) return <Navigate to="/" replace />;
-  return <>{children}</>;
-};
+
 
 function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -38,15 +21,6 @@ function App() {
   useEffect(() => {
     setIsAuthReady(true);
   }, []);
-
-  // Backwards compatibility for Admin Dashboards
-  const handleLogin = (userData: { name: string; role: string }) => {
-    useAppStore.setState({ user: userData });
-  };
-
-  const handleLogout = () => {
-    useAppStore.getState().clearSession();
-  };
 
   if (!isAuthReady) {
     return (
@@ -60,53 +34,18 @@ function App() {
     <Router>
       <div className="min-h-screen bg-mesh text-slate-900 dark:text-slate-200 transition-colors duration-500">
         <Toaster position="top-right" richColors />
-        <NavbarWrapper user={user} onLogout={handleLogout} />
+        <NavbarWrapper user={user} onLogout={() => {}} />
         
         <Routes>
           {/* Main Terminal Entry */}
           <Route path="/" element={<LandingPage />} />
           
-          {/* Hidden Admin Login */}
-          <Route 
-            path="/login" 
-            element={user ? <Navigate to={user.role === 'admin' ? '/dashboard' : '/scan'} replace /> : <LoginPage onLogin={handleLogin} />} 
-          />
-          <Route path="/forgot-password" element={user ? <Navigate to="/" replace /> : <ForgotPasswordPage />} />
-          
-          {/* VISION-FIRST KIOSK FLOW (No auth required to enter) */}
+          {/* VISION-FIRST POS FLOW */}
           <Route path="/scan" element={<CameraScannerPage />} />
           <Route path="/identity-check" element={<IdentityCheckPage />} />
           <Route path="/cart" element={<CartSummaryPage />} />
           <Route path="/payment" element={<PaymentQRISPage />} />
           <Route path="/verify-receipt" element={<ReceiptVerificationPage />} />
-          
-          {/* Admin / Settings Routes */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute user={user} allowedRole="admin">
-                <DashboardPage user={user} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/analytics" 
-            element={
-              <ProtectedRoute user={user} allowedRole="kasir">
-                <AnalyticsPage user={user} />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute user={user} allowedRole="kasir">
-                <ProfilePage user={user} onUpdate={handleLogin} />
-              </ProtectedRoute>
-            } 
-          />
           
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

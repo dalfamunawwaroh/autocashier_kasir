@@ -62,17 +62,17 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     try {
       if (password) {
         // Authenticate via database
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: cleanUsername, password })
         });
         const data = await res.json();
         
-        if (res.ok && data.status === 'success') {
+        if (res.ok && data.success) {
           // Pass the authenticated user data to the store
-          const role = data.data.user.role || 'admin';
-          onLogin({ name: data.data.user.full_name || cleanUsername, role, phone: cleanUsername });
+          const role = data.user.role || 'admin';
+          onLogin({ name: data.user.name || cleanUsername, role, phone: cleanUsername });
         } else {
           toast.error(data.error || 'Login gagal, periksa username/password');
         }

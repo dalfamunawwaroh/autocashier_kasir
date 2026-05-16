@@ -220,14 +220,40 @@ async function startServer() {
   // 5. Checkout
   app.post("/api/checkout", async (req, res) => {
     try {
-      const { header, items } = req.body;
+      const { header, items, receiptBase64 } = req.body;
+      let receiptUrl = null;
+
+      // Handle receipt image upload
+      if (receiptBase64) {
+        try {
+          const base64Data = receiptBase64.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, 'base64');
+          const fileName = `receipt-${header.invoice_number}-${Date.now()}.jpg`;
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('receipts')
+            .upload(fileName, buffer, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+
+          if (uploadError) {
+            console.error("Failed to upload receipt:", uploadError);
+          } else if (uploadData) {
+            const { data: publicUrlData } = supabase.storage.from('receipts').getPublicUrl(uploadData.path);
+            receiptUrl = publicUrlData.publicUrl;
+          }
+        } catch (imgErr) {
+          console.error("Error processing receipt image:", imgErr);
+        }
+      }
+
       const { data: transaction, error: txError } = await supabase.from('transactions').insert([{
         invoice_number: header.invoice_number,
         total_price: header.total_price,
         payment_method: header.payment_method,
-        cash_received: header.cash_received,
-        cash_return: header.cash_return,
-        cashier_name: header.cashier_name
+        receipt_url: receiptUrl,
+        payment_status: 'pending_verification'
       }]).select().single();
       if (txError) throw txError;
 
@@ -235,34 +261,148 @@ async function startServer() {
         await supabase.from('transaction_items').insert([{
           transaction_id: transaction.id,
           product_id: item.id || item.product_id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          subtotal: item.subtotal
+          unit_price: item.price,
+          quantity: item.quantity
         }]);
 
         const { data: product } = await supabase.from('products').select('stock').eq('id', item.id || item.product_id).single();
         if (product) {
           await supabase.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id || item.product_id);
-          await supabase.from('inventory_logs').insert([{
-            product_id: item.id || item.product_id,
-            type: 'out',
-            quantity: item.quantity,
-            note: 'sale',
-            logged_by: header.cashier_name || 'System',
-            reason: 'sale',
-            invoice_number: header.invoice_number
-          }]);
         }
       }
+
+      // --- LOYALTY POINTS SYSTEM ---
+      const memberId = header.member_id as string | undefined;
+      if (memberId) {
+        const totalPaid = Number(header.total_price);
+        const pointsUsed = Number(header.points_used || 0);
+        const promoId = header.promo_id as string | undefined;
+
+        // 1. Tandai promo sebagai sudah dipakai
+        if (promoId) {
+          await supabase.from('member_promos').update({ is_used: true }).eq('id', promoId);
+        }
+
+        // 2. Hitung poin yang didapat: 1% dari total yang dibayarkan (setelah diskon & redeem)
+        const earnedPoints = Math.floor(totalPaid * 0.01);
+
+        // 3. Ambil saldo poin saat ini
+        const { data: currentPoints } = await supabase
+          .from('member_points')
+          .select('balance')
+          .eq('user_id', memberId)
+          .maybeSingle();
+
+        const currentBalance = currentPoints?.balance || 0;
+        const newBalance = currentBalance - pointsUsed + earnedPoints;
+
+        // 4. Upsert saldo poin member
+        await supabase.from('member_points').upsert(
+          { user_id: memberId, balance: Math.max(0, newBalance), updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        );
+
+        // 5. Catat transaksi poin
+        const pointLogs: any[] = [];
+        if (pointsUsed > 0) {
+          pointLogs.push({ user_id: memberId, transaction_id: transaction.id, type: 'redeem', points: -pointsUsed, note: `Poin digunakan untuk transaksi ${header.invoice_number}` });
+        }
+        if (earnedPoints > 0) {
+          pointLogs.push({ user_id: memberId, transaction_id: transaction.id, type: 'earn', points: earnedPoints, note: `1% dari Rp${totalPaid.toLocaleString('id-ID')}` });
+        }
+        if (pointLogs.length > 0) {
+          await supabase.from('point_transactions').insert(pointLogs);
+        }
+
+        console.log(`[LOYALTY] Member ${memberId}: -${pointsUsed}pts (redeem) +${earnedPoints}pts (earn) → balance=${Math.max(0, newBalance)}pts`);
+      }
+
       res.json({ success: true, transaction });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Checkout error:", error);
-      res.status(500).json({ success: false, message: "Checkout failed" });
+      res.status(500).json({ success: false, message: "Checkout failed", error: error?.message || String(error) });
     }
   });
 
-  // 6. Analytics
+  // 6. Member Check
+  app.post("/api/members/check", async (req, res) => {
+    try {
+      const { phone } = req.body;
+      if (!phone) return res.status(400).json({ success: false, message: "Nomor WhatsApp diperlukan" });
+
+      const { data: member, error } = await supabase
+        .from('users')
+        .select('id, full_name, role, whatsapp')
+        .eq('whatsapp', phone)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (member) {
+        res.json({ 
+          success: true, 
+          isMember: true, 
+          user: { 
+            id: member.id, 
+            name: member.full_name, 
+            role: member.role, 
+            phone: member.whatsapp 
+          } 
+        });
+      } else {
+        res.json({ success: true, isMember: false, message: "Member tidak ditemukan" });
+      }
+    } catch (error) {
+      console.error("Member check error:", error);
+      res.status(500).json({ success: false, message: "Gagal memeriksa keanggotaan" });
+    }
+  });
+
+  // 6b. Get Member Promos
+  app.get("/api/members/promos", async (req, res) => {
+    try {
+      const { user_id } = req.query;
+      if (!user_id) return res.status(400).json({ success: false, message: "user_id diperlukan" });
+
+      const now = new Date().toISOString();
+      const { data: promos, error } = await supabase
+        .from('member_promos')
+        .select('*')
+        .eq('user_id', user_id)
+        .eq('is_used', false)
+        .or(`expires_at.is.null,expires_at.gt.${now}`);
+
+      if (error) throw error;
+
+      res.json({ success: true, promos: promos || [] });
+    } catch (error: any) {
+      console.error("Get promos error:", error);
+      res.status(500).json({ success: false, message: "Gagal mengambil promo", error: error.message });
+    }
+  });
+
+  // 6c. Get Member Points
+  app.get("/api/members/points", async (req, res) => {
+    try {
+      const { user_id } = req.query;
+      if (!user_id) return res.status(400).json({ success: false, message: "user_id diperlukan" });
+
+      const { data: pointsData, error } = await supabase
+        .from('member_points')
+        .select('balance')
+        .eq('user_id', user_id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      res.json({ success: true, balance: pointsData?.balance || 0 });
+    } catch (error: any) {
+      console.error("Get points error:", error);
+      res.status(500).json({ success: false, message: "Gagal mengambil poin", error: error.message });
+    }
+  });
+
+  // 7. Analytics
   app.get("/api/analytics", async (req, res) => {
     try {
       const { data: transactions, error } = await supabase.from('transactions').select('*, transaction_items(*)');

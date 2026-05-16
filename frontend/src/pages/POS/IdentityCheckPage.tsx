@@ -24,22 +24,33 @@ export default function IdentityCheckPage() {
     setIsLoading(true);
     setErrorStatus(null);
     
-    setTimeout(() => {
-      // Mock logic: Only allow '081234' as a demo valid member
-      if (phone === '081234') {
-        const user = { name: 'Demo Member', role: 'kasir', phone };
-        setIdentity(user, true); // true = valid member
+    try {
+      const response = await fetch('/api/members/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      const data = await response.json();
+
+      if (data.success && data.isMember && data.user) {
+        setIdentity(data.user, true); // true = valid member
         navigate('/cart', { state: { items: cartItems } });
       } else {
         // Not found -> Guests
-        setErrorStatus(t.WA_NOT_FOUND);
+        setErrorStatus(data.message || t.WA_NOT_FOUND);
         setIdentity({ name: 'Guest', role: 'kasir' }, false);
         
         // Auto-proceed to cart as guest after reading the error
         setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 3000);
       }
+    } catch (err) {
+      console.error("Error checking member:", err);
+      setErrorStatus("Terjadi kesalahan sistem. Melanjutkan sebagai Guest.");
+      setIdentity({ name: 'Guest', role: 'kasir' }, false);
+      setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 3000);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleSkip = () => {

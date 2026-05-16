@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, User, LayoutDashboard, ShoppingCart, Sun, Moon } from 'lucide-react';
+import { ShoppingCart, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import Logo from '../UI/Logo';
@@ -48,47 +48,15 @@ export default function Navbar({ user, onLogout }: NavbarProps) {
           {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
 
-        {user ? (
           <div className="flex items-center gap-6">
-            {user.role === 'afa_kasir' && (
-              <NavLink to="/pos">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="w-4 h-4" />
-                  POS
-                </div>
-              </NavLink>
-            )}
-            {(user.role === 'inaya_admin' || user.role === 'admin') && (
-              <NavLink to="/dashboard">
-                <div className="flex items-center gap-2">
-                  <LayoutDashboard className="w-4 h-4" />
-                  Dashboard
-                </div>
-              </NavLink>
-            )}
-            
-            <div className="h-6 w-px bg-slate-200 dark:bg-white/10" />
-
-            <NavLink to="/profile">
-              <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center">
-                <User className="w-4 h-4 text-brand-primary" />
+            <NavLink to="/">Home</NavLink>
+            <NavLink to="/scan">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4" />
+                POS
               </div>
             </NavLink>
-
-            <button 
-              onClick={() => {
-                onLogout();
-                navigate('/');
-              }}
-              className="p-2 text-slate-400 hover:text-brand-accent transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
           </div>
-        ) : (
-          <NavLink to="/">Home</NavLink>
-        )}
       </div>
     </nav>
   );

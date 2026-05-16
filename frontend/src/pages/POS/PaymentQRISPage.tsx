@@ -14,7 +14,7 @@ export default function PaymentQRISPage() {
   const total = location.state?.total || 0;
 
   const handleSimulatePayment = () => {
-    navigate('/verify-receipt', { state: { total } });
+    navigate('/verify-receipt', { state: { ...location.state } });
   };
 
   return (
