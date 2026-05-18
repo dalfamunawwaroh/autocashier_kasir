@@ -300,46 +300,74 @@ export default function LandingPage() {
       </section>
 
       {/* --- FOOTER --- */}
-      <footer className="py-20 border-t border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-16">
-          <div className="col-span-1 md:col-span-2">
-            <div className="mb-8">
-              <Logo />
+      <footer className="py-24 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/60 backdrop-blur-xl relative overflow-hidden">
+        {/* Glow ambient background effects */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-16 relative z-10">
+          <div className="col-span-1 md:col-span-2 space-y-6">
+            <div className="mb-6 transform scale-125 origin-left transition-transform duration-300 hover:scale-130">
+              <Logo imgClass="h-16 w-auto object-contain transition-all duration-500" />
             </div>
-            <p className="text-slate-600 dark:text-slate-500 max-w-sm leading-relaxed mb-8">
-              Solusi Point of Sales berbasis Computer Vision untuk modernisasi Koperasi GIAT Cabang Bandung. Dibangun dengan fokus pada kecepatan, akurasi, dan kemandirian.
+            <p className="text-slate-600 dark:text-slate-400 max-w-md leading-relaxed text-sm font-medium">
+              AutoCashier adalah sistem POS cerdas berbasis Computer Vision YOLOv8 yang dirancang khusus untuk merevolusi efisiensi operasional Koperasi GIAT. Letakkan barang, scan instan, bayar digital.
             </p>
-            <div className="flex gap-4">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-widest">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              4 Cabang Operasional Aktif
+            </div>
+            <div className="flex gap-4 pt-2">
               {['Instagram', 'LinkedIn', 'Github'].map(social => (
-                <div key={social} className="px-4 py-2 rounded-full border border-slate-200 dark:border-white/10 text-[10px] font-bold text-slate-600 dark:text-slate-500 hover:bg-brand-primary hover:text-white transition-all cursor-pointer uppercase tracking-widest">{social}</div>
+                <a
+                  key={social} href="#"
+                  className="px-5 py-2.5 rounded-full border border-slate-200 dark:border-white/10 text-[9px] font-black text-slate-600 dark:text-slate-400 hover:bg-brand-primary hover:text-white hover:border-brand-primary transition-all cursor-pointer uppercase tracking-widest"
+                >
+                  {social}
+                </a>
               ))}
             </div>
           </div>
           
           <div>
-            <h5 className="text-slate-900 dark:text-white font-bold mb-6 text-sm">Product</h5>
-            <ul className="space-y-4 text-sm text-slate-600 dark:text-slate-500">
-              <li><a href="#" className="hover:text-neon-blue transition-colors">Features</a></li>
-              <li><a href="#" className="hover:text-neon-blue transition-colors">YOLOv8 AI</a></li>
-              <li><a href="#" className="hover:text-neon-blue transition-colors">Security</a></li>
+            <h5 className="text-slate-900 dark:text-white font-black uppercase tracking-wider mb-6 text-xs text-brand-primary">Cabang Koperasi</h5>
+            <ul className="space-y-4 text-sm text-slate-600 dark:text-slate-400 font-bold">
+              <li className="flex items-center gap-2.5 group cursor-pointer hover:text-brand-primary transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary group-hover:scale-150 transition-all" />
+                Jakarta Central (JKT)
+              </li>
+              <li className="flex items-center gap-2.5 group cursor-pointer hover:text-brand-primary transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary group-hover:scale-150 transition-all" />
+                Bandung Branch (BDG)
+              </li>
+              <li className="flex items-center gap-2.5 group cursor-pointer hover:text-brand-primary transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary group-hover:scale-150 transition-all" />
+                Surabaya Branch (SBY)
+              </li>
+              <li className="flex items-center gap-2.5 group cursor-pointer hover:text-brand-primary transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary group-hover:scale-150 transition-all" />
+                Cabang Utama (UTM)
+              </li>
             </ul>
           </div>
 
           <div>
-            <h5 className="text-slate-900 dark:text-white font-bold mb-6 text-sm">Company</h5>
-            <ul className="space-y-4 text-sm text-slate-600 dark:text-slate-500">
-              <li><a href="#" className="hover:text-neon-blue transition-colors">About JagoAI</a></li>
-              <li><a href="#" className="hover:text-neon-blue transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-neon-blue transition-colors">Contact</a></li>
+            <h5 className="text-slate-900 dark:text-white font-black uppercase tracking-wider mb-6 text-xs text-brand-primary">Teknologi AI POS</h5>
+            <ul className="space-y-4 text-sm text-slate-600 dark:text-slate-400 font-bold">
+              <li className="hover:text-brand-primary transition-colors cursor-pointer flex items-center gap-2">👁️ YOLOv8 Computer Vision</li>
+              <li className="hover:text-brand-primary transition-colors cursor-pointer flex items-center gap-2">💳 QRIS Auto-Verification</li>
+              <li className="hover:text-brand-primary transition-colors cursor-pointer flex items-center gap-2">✨ Sesi Kasir & Member Terpisah</li>
+              <li className="hover:text-brand-primary transition-colors cursor-pointer flex items-center gap-2">🤝 Alur Kantin Kejujuran</li>
+              <li className="hover:text-brand-primary transition-colors cursor-pointer flex items-center gap-2">🎁 Cashback Points (1%)</li>
             </ul>
           </div>
         </div>
         
-        <div className="max-w-7xl mx-auto px-6 mt-20 pt-8 border-t border-slate-200 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-slate-500 dark:text-slate-600 text-[10px] font-bold uppercase tracking-[0.2em]">
+        <div className="max-w-7xl mx-auto px-6 mt-20 pt-8 border-t border-slate-200 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-slate-500 dark:text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] relative z-10">
           <span>&copy; 2026 JagoAI - Modernizing Retail Experience</span>
           <div className="flex gap-8">
-            <a href="#" className="hover:text-neon-blue transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-neon-blue transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-brand-primary transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-brand-primary transition-colors">Terms of Service</a>
           </div>
         </div>
       </footer>

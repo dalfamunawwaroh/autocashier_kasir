@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 
-export default function Logo() {
+export default function Logo({ className, imgClass }: { className?: string; imgClass?: string }) {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -17,11 +17,11 @@ export default function Logo() {
   const isDark = resolvedTheme === 'dark';
 
   return (
-    <div className="flex items-center group cursor-pointer">
+    <div className={`flex items-center group cursor-pointer ${className || ''}`}>
       <img 
         src={isDark ? "/AutoCashier BW.png" : "/AutoCashier.png"} 
         alt="AutoCashier Logo" 
-        className="h-10 md:h-12 w-auto object-contain transition-all duration-500 group-hover:scale-105"
+        className={imgClass || "h-10 md:h-12 w-auto object-contain transition-all duration-500 group-hover:scale-105"}
       />
     </div>
   );
