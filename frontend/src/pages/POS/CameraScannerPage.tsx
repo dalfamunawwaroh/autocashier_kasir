@@ -373,7 +373,7 @@ export default function CameraScannerPage() {
               name: productName,
               price: productPrice,
               qty: 1,
-              image: productData?.image || undefined
+              image: productData?.image_url || undefined
             }];
           });
 
