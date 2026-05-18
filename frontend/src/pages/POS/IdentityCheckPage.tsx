@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Phone, ArrowRight, SkipForward, AlertCircle } from 'lucide-react';
+import { Phone, ArrowRight, SkipForward, AlertCircle, User } from 'lucide-react';
 import { useAppStore, translations } from '../../store/useAppStore';
 
 export default function IdentityCheckPage() {
@@ -70,8 +70,8 @@ export default function IdentityCheckPage() {
         className="w-full max-w-md glass-card p-8 rounded-[2rem] shadow-2xl relative z-10"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-900 dark:text-white">
-            <span className="text-3xl">👋</span>
+          <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-[#0047FF]">
+            <User className="w-8 h-8 animate-pulse" />
           </div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2">{t.IDENTITY_TITLE}</h1>
           <p className="text-slate-600 dark:text-slate-400 font-medium">{t.IDENTITY_SUB}</p>

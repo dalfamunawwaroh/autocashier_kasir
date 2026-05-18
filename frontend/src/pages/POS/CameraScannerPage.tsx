@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, ShoppingBag, ShieldCheck, Loader2,
   Phone, ArrowRight, SkipForward, AlertCircle, X, Scan, Camera,
-  Cpu, Zap, WifiOff, RefreshCw, Database, Minimize2, Plus, Minus, Trash2
+  Cpu, Zap, WifiOff, RefreshCw, Database, Minimize2, Plus, Minus, Trash2, User
 } from 'lucide-react';
 import { useAppStore, translations } from '../../store/useAppStore';
 
@@ -81,7 +81,9 @@ function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
           <X className="w-6 h-6" />
         </button>
 
-        <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl">👋</div>
+        <div className="w-16 h-16 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-[#0047FF]">
+          <User className="w-8 h-8 animate-pulse" />
+        </div>
         <h1 className="text-3xl font-black text-white mb-2 italic uppercase tracking-tighter">{t.IDENTITY_TITLE}</h1>
         <p className="text-slate-400 font-medium text-sm mb-8">{t.IDENTITY_SUB}</p>
 
