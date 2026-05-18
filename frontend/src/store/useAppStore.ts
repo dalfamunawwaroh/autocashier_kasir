@@ -8,10 +8,12 @@ interface AppState {
   language: Language;
   theme: Theme;
   user: { id?: string; name: string; role: string; phone?: string; branch_id?: string; branch_code?: string; branch_name?: string } | null;
+  member: { id?: string; name: string; phone?: string } | null;
   isMember: boolean;
   toggleLanguage: () => void;
   setTheme: (theme: Theme) => void;
   setIdentity: (user: { id?: string; name: string; role: string; phone?: string; branch_id?: string; branch_code?: string; branch_name?: string }, isMember: boolean) => void;
+  setMemberIdentity: (member: { id?: string; name: string; phone?: string } | null, isMember: boolean) => void;
   clearSession: () => void;
   setIsMember: (val: boolean) => void;
   setLanguage: (lang: Language) => void;
@@ -23,6 +25,7 @@ export const useAppStore = create<AppState>()(
       language: 'id',
       theme: 'dark',
       user: null,
+      member: null,
       isMember: false,
 
       // Actions
@@ -32,12 +35,14 @@ export const useAppStore = create<AppState>()(
       
       setIdentity: (user, isMember) => set({ user, isMember }),
       
+      setMemberIdentity: (member, isMember) => set({ member, isMember }),
+      
       setIsMember: (val) => set({ isMember: val }),
 
       setLanguage: (lang) => set({ language: lang }),
 
       clearSession: () => set({ 
-        user: null, 
+        member: null, 
         isMember: false 
       }),
     }),

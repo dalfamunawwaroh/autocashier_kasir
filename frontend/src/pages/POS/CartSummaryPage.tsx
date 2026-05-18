@@ -20,7 +20,7 @@ interface MemberPromo {
 export default function CartSummaryPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { language, isMember, user } = useAppStore();
+  const { language, isMember, member } = useAppStore();
   const t = translations[language];
 
   const items: CartItem[] = location.state?.items || [];
@@ -38,7 +38,7 @@ export default function CartSummaryPage() {
   const [usePoints, setUsePoints] = useState(false);
   const [voucherError, setVoucherError] = useState<string | null>(null);
 
-  const memberId = user?.id;
+  const memberId = member?.id;
 
   // Fetch member promos & points when member is logged in
   useEffect(() => {
@@ -167,7 +167,7 @@ export default function CartSummaryPage() {
 
           {/* MEMBER IDENTITY SECTION */}
           <div className="glass-card rounded-[2.5rem] p-6 text-left">
-            {isMember && user ? (
+            {isMember && member ? (
               <div className="space-y-3">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Member</p>
                 <div className="flex items-center gap-3">
@@ -175,8 +175,8 @@ export default function CartSummaryPage() {
                     <User className="text-emerald-500 w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-black text-sm text-slate-900 dark:text-white leading-tight">{user.name}</p>
-                    <p className="text-[10px] text-slate-500 font-bold">{user.phone || 'Member Aktif'}</p>
+                    <p className="font-black text-sm text-slate-900 dark:text-white leading-tight">{member.name}</p>
+                    <p className="text-[10px] text-slate-500 font-bold">{member.phone || 'Member Aktif'}</p>
                   </div>
                   <div className="ml-auto">
                     <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full flex items-center gap-1">

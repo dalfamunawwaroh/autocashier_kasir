@@ -24,7 +24,7 @@ interface IdentityCheckModalProps {
 
 function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
   const navigate = useNavigate();
-  const { language, setIdentity } = useAppStore();
+  const { language, setMemberIdentity } = useAppStore();
   const t = translations[language];
   const [phone, setPhone] = useState('');
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
@@ -45,11 +45,11 @@ function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
       const data = await response.json();
 
       if (data.success && data.isMember) {
-        setIdentity(data.user, true);
+        setMemberIdentity(data.user, true);
         navigate('/cart', { state: { items: cartItems } });
       } else {
         setErrorStatus(t.WA_NOT_FOUND);
-        setIdentity({ name: 'Guest', role: 'kasir' }, false);
+        setMemberIdentity({ name: 'Guest' }, false);
         setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 2000);
       }
     } catch (err) {
@@ -61,7 +61,7 @@ function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
   };
 
   const handleSkip = () => {
-    setIdentity({ name: 'Guest', role: 'kasir' }, false);
+    setMemberIdentity({ name: 'Guest' }, false);
     navigate('/cart', { state: { items: cartItems } });
   };
 

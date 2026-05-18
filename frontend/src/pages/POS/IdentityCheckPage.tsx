@@ -7,7 +7,7 @@ import { useAppStore, translations } from '../../store/useAppStore';
 export default function IdentityCheckPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { language, setIdentity } = useAppStore();
+  const { language, setMemberIdentity } = useAppStore();
   const t = translations[language];
 
   // Receive the cart items forwarded from Scanner
@@ -33,12 +33,12 @@ export default function IdentityCheckPage() {
       const data = await response.json();
 
       if (data.success && data.isMember && data.user) {
-        setIdentity(data.user, true); // true = valid member
+        setMemberIdentity(data.user, true); // true = valid member
         navigate('/cart', { state: { items: cartItems } });
       } else {
         // Not found -> Guests
         setErrorStatus(data.message || t.WA_NOT_FOUND);
-        setIdentity({ name: 'Guest', role: 'kasir' }, false);
+        setMemberIdentity({ name: 'Guest' }, false);
         
         // Auto-proceed to cart as guest after reading the error
         setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 3000);
@@ -46,7 +46,7 @@ export default function IdentityCheckPage() {
     } catch (err) {
       console.error("Error checking member:", err);
       setErrorStatus("Terjadi kesalahan sistem. Melanjutkan sebagai Guest.");
-      setIdentity({ name: 'Guest', role: 'kasir' }, false);
+      setMemberIdentity({ name: 'Guest' }, false);
       setTimeout(() => navigate('/cart', { state: { items: cartItems } }), 3000);
     } finally {
       setIsLoading(false);
@@ -54,7 +54,7 @@ export default function IdentityCheckPage() {
   };
 
   const handleSkip = () => {
-    setIdentity({ name: 'Guest', role: 'kasir' }, false);
+    setMemberIdentity({ name: 'Guest' }, false);
     navigate('/cart', { state: { items: cartItems } });
   };
 
