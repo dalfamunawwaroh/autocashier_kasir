@@ -101,6 +101,7 @@ export default function ReceiptVerificationPage() {
               member_id: stateData.memberId || null,
               promo_id: stateData.promoId || null,
               points_used: stateData.pointsUsed || 0,
+              branch: 'Cabang Bandung'
             },
             items: stateData.items || [],
             receiptBase64: receiptBase64

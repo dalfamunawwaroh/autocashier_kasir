@@ -410,7 +410,8 @@ export default function POSPage({ user }: POSPageProps) {
           payment_method: paymentMethod,
           cash_received: Number(cashReceived) || 0,
           cash_return: Math.max(0, Number(cashReceived) - totalAmount),
-          cashier_name: user?.name || 'Unknown'
+          cashier_name: user?.name || 'Unknown',
+          branch: 'Cabang Bandung'
         },
         items: cart.map(item => ({
           product_id: item.id,
