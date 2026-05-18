@@ -361,7 +361,7 @@ export default function CameraScannerPage() {
           const productId = productData?.id || label;
 
            // Play success sound
-          new Audio('/Apple-Pay-Face-ID-Ding-Sound-Effect.mp3').play().catch(() => {});
+          new Audio('/sound.mpeg').play().catch(() => {});
 
           setScanState(prev => ({ ...prev, status: 'CONFIRMED' }));
 
