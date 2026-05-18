@@ -406,28 +406,28 @@ export default function CameraScannerPage() {
       {isCameraReady && scanState.status === 'SCANNING' && !scanState.box && (
         <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
           <motion.div
-            animate={{ opacity: [0.2, 0.5, 0.2] }}
+            animate={{ opacity: [0.6, 1, 0.6] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="w-[60%] h-[50%] border-2 border-dashed border-[#0047FF]/40 rounded-[40px] relative"
+            className="w-[60%] h-[50%] border-[3px] border-dashed border-[#0047FF] rounded-[40px] relative shadow-[0_0_30px_rgba(0,71,255,0.15)]"
           >
             {/* Corner markers */}
-            <div className="absolute -top-1 -left-1 w-10 h-10 border-t-3 border-l-3 border-[#0047FF] rounded-tl-xl" />
-            <div className="absolute -top-1 -right-1 w-10 h-10 border-t-3 border-r-3 border-[#0047FF] rounded-tr-xl" />
-            <div className="absolute -bottom-1 -left-1 w-10 h-10 border-b-3 border-l-3 border-[#0047FF] rounded-bl-xl" />
-            <div className="absolute -bottom-1 -right-1 w-10 h-10 border-b-3 border-r-3 border-[#0047FF] rounded-br-xl" />
+            <div className="absolute -top-[3px] -left-[3px] w-12 h-12 border-t-[5px] border-l-[5px] border-[#0047FF] rounded-tl-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
+            <div className="absolute -top-[3px] -right-[3px] w-12 h-12 border-t-[5px] border-r-[5px] border-[#0047FF] rounded-tr-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
+            <div className="absolute -bottom-[3px] -left-[3px] w-12 h-12 border-b-[5px] border-l-[5px] border-[#0047FF] rounded-bl-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
+            <div className="absolute -bottom-[3px] -right-[3px] w-12 h-12 border-b-[5px] border-r-[5px] border-[#0047FF] rounded-br-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
 
             {/* Scan line animation */}
             <motion.div
               animate={{ y: [0, 250, 0] }}
               transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute left-4 right-4 h-[2px] bg-gradient-to-r from-transparent via-[#0047FF] to-transparent"
+              className="absolute left-4 right-4 h-[3px] bg-gradient-to-r from-transparent via-[#0047FF] to-transparent shadow-[0_0_15px_rgba(0,71,255,0.8)] rounded-full"
             />
           </motion.div>
 
           {/* Instruction text */}
-          <div className="absolute bottom-[30%] flex items-center gap-2 text-white/40 text-xs font-bold uppercase tracking-widest">
-            <Camera className="w-4 h-4" />
-            Arahkan barang ke kamera
+          <div className="absolute bottom-[32%] flex items-center gap-3 bg-black/75 backdrop-blur-md px-6 py-3 rounded-full text-white font-black text-sm uppercase tracking-widest border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-20">
+            <Camera className="w-5 h-5 text-[#0047FF]" />
+            <span>Arahkan barang ke kamera</span>
           </div>
         </div>
       )}
