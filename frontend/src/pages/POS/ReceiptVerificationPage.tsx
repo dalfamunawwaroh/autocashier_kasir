@@ -85,6 +85,8 @@ export default function ReceiptVerificationPage() {
   useEffect(() => {
     if (step === 'verifying') {
       const processCheckout = async () => {
+        try {
+          const receiptBase64 = captureReceipt();
           const stateData = location.state || {};
           const branchId = localStorage.getItem('autocashier_branch_id') || null;
           const branchCode = localStorage.getItem('autocashier_branch_code') || 'BDG';

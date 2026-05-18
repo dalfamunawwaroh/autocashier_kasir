@@ -98,6 +98,22 @@ export default function POSPage({ user }: POSPageProps) {
   const isDark = theme === 'dark';
   const [isSyncing, setIsSyncing] = useState(true);
   const [invoiceNumber, setInvoiceNumber] = useState('');
+
+  // Auto-fetch branch if missing in localStorage
+  useEffect(() => {
+    if (!localStorage.getItem('autocashier_branch_id')) {
+      fetch('/api/branches')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data.length > 0) {
+            localStorage.setItem('autocashier_branch_id', data.data[0].id);
+            localStorage.setItem('autocashier_branch_code', data.data[0].code);
+          }
+        })
+        .catch(err => console.error('Failed to auto-fetch branches:', err));
+    }
+  }, []);
+
   const [storeName, setStoreName] = useState('Koperasi GIAT Cabang Bandung - AI POS');
   const [scanLogs, setScanLogs] = useState<{ time: string; msg: string; color: string }[]>([
     { time: new Date().toLocaleTimeString('en-GB', { hour12: false }), msg: 'System initialized...', color: 'text-slate-400' }

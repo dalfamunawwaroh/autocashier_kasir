@@ -256,6 +256,7 @@ async function startServer() {
       const { data: transaction, error: txError } = await supabase.from('transactions').insert([{
         invoice_number: invoiceNumber,
         branch_id: header.branch_id || null,
+        member_id: header.member_id || null,
         total_price: header.total_price,
         payment_method: header.payment_method,
         receipt_url: receiptUrl,
