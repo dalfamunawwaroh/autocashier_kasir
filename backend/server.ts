@@ -248,8 +248,19 @@ async function startServer() {
         }
       }
 
+      let invoiceNumber = header.invoice_number;
+      if (invoiceNumber && !invoiceNumber.includes("BDG")) {
+        if (invoiceNumber.startsWith("INV-")) {
+          invoiceNumber = invoiceNumber.replace("INV-", "INV-BDG-");
+        } else if (invoiceNumber.startsWith("AC-")) {
+          invoiceNumber = invoiceNumber.replace("AC-", "AC-BDG-");
+        } else {
+          invoiceNumber = `BDG-${invoiceNumber}`;
+        }
+      }
+
       const { data: transaction, error: txError } = await supabase.from('transactions').insert([{
-        invoice_number: header.invoice_number,
+        invoice_number: invoiceNumber,
         total_price: header.total_price,
         payment_method: header.payment_method,
         receipt_url: receiptUrl,

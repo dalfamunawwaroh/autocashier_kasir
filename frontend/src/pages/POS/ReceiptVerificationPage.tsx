@@ -92,7 +92,7 @@ export default function ReceiptVerificationPage() {
           // Data yang akan dikirim ke backend
           const payload = {
             header: {
-              invoice_number: `INV-${Date.now()}`,
+              invoice_number: `INV-BDG-${Date.now()}`,
               total_price: stateData.total || 0,
               payment_method: 'QRIS',
               cash_received: stateData.total || 0,

@@ -384,11 +384,11 @@ export default function POSPage({ user }: POSPageProps) {
   const handleCheckout = () => {
     if (cart.length === 0) return;
     
-    // Format: AC-YYYYMMDD-SEQ (using timestamp for simplicity in SEQ)
+    // Format: AC-BDG-YYYYMMDD-SEQ (using timestamp for simplicity in SEQ)
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const seq = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const newInvoice = `AC-${dateStr}-${seq}`;
+    const newInvoice = `AC-BDG-${dateStr}-${seq}`;
     
     setInvoiceNumber(newInvoice);
     setIsCheckoutModalOpen(true);
