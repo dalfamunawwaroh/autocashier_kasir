@@ -358,8 +358,8 @@ export default function CameraScannerPage() {
           const productPrice = productData?.price || 0;
           const productId = productData?.id || label;
 
-          // Play success sound
-          new Audio('https://assets.mixkit.co/active_storage/sfx/707/707-preview.mp3').play().catch(() => {});
+           // Play success sound
+          new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3').play().catch(() => {});
 
           setScanState(prev => ({ ...prev, status: 'CONFIRMED' }));
 
