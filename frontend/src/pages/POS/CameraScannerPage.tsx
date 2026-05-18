@@ -14,6 +14,7 @@ export interface CartItem {
   name: string;
   price: number;
   qty: number;
+  image?: string;
 }
 
 // --- COMPONENT: IDENTITY CHECK MODAL ---
@@ -371,7 +372,8 @@ export default function CameraScannerPage() {
               label: label,
               name: productName,
               price: productPrice,
-              qty: 1
+              qty: 1,
+              image: productData?.image || undefined
             }];
           });
 
