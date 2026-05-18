@@ -533,8 +533,8 @@ export default function CameraScannerPage() {
       {/* Header */}
       <div className="absolute top-0 inset-x-0 p-8 z-20">
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
-          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">
-            GIAT <span className="text-[#0047FF]">SCANNER</span>
+          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none select-none">
+            GIAT <span className="text-blue-500 drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]">SCANNER</span>
           </div>
 
           {/* Vision pipeline & status badges */}
@@ -545,28 +545,31 @@ export default function CameraScannerPage() {
               {syncMsg && (
                 <motion.div
                   initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
-                  className="text-[9px] font-black text-white/60 bg-white/5 px-3 py-1.5 rounded-full border border-white/10"
+                  className="text-[10px] font-black text-white/80 bg-white/10 px-3.5 py-1.5 rounded-full border border-white/20 backdrop-blur-md shadow-lg"
                 >
                   {syncMsg}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Vision server status + product count + sync button */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-              visionOnline === null ? 'border-white/10 text-white/30 bg-white/5' :
-              visionOnline ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10' :
-              'border-amber-500/40 text-amber-400 bg-amber-500/10'
+            {/* Vision server status + product count */}
+            <div className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider border transition-all duration-300 ${
+              visionOnline === null ? 'border-white/20 text-white/50 bg-white/10' :
+              visionOnline ? 'border-emerald-500/35 text-emerald-400 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)] backdrop-blur-md' :
+              'border-rose-500/35 text-rose-400 bg-rose-500/10 shadow-[0_0_15px_rgba(244,63,94,0.15)] backdrop-blur-md'
             }`}>
-              {visionOnline === null ? <Loader2 className="w-3 h-3 animate-spin" /> :
-               visionOnline ? <Cpu className="w-3 h-3" /> :
-               <WifiOff className="w-3 h-3" />}
-              {visionOnline === null ? 'Mengecek…' :
-               visionOnline ? `Sistem Pintar` :
-               'Terputus'}
+              {visionOnline === null ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+               visionOnline ? <Cpu className="w-3.5 h-3.5 text-emerald-400 animate-pulse" /> :
+               <WifiOff className="w-3.5 h-3.5 text-rose-400" />}
+              <span>
+                {visionOnline === null ? 'Mengecek…' :
+                 visionOnline ? 'Sistem Pintar' :
+                 'Terputus'}
+              </span>
               {visionOnline && visionProducts > 0 && (
-                <span className="flex items-center gap-1 opacity-70">
-                  <Database className="w-3 h-3" />{visionProducts}
+                <span className="flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-[10px] text-emerald-300 border border-emerald-500/20 font-black">
+                  <Database className="w-2.5 h-2.5" />
+                  <span>{visionProducts}</span>
                 </span>
               )}
             </div>
@@ -577,25 +580,36 @@ export default function CameraScannerPage() {
                 onClick={handleSync}
                 disabled={isSyncing}
                 title="Sync produk dari database"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border border-[#0047FF]/40 text-[#0047FF] bg-[#0047FF]/10 hover:bg-[#0047FF]/20 transition-all disabled:opacity-40"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider border border-blue-500/35 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 hover:text-white hover:border-blue-400/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.25)] active:scale-95 transition-all disabled:opacity-40 backdrop-blur-md"
               >
-                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Memperbarui…' : 'Perbarui Data'}
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Memperbarui…' : 'Perbarui Data'}</span>
               </button>
             )}
 
             {/* Scan status */}
-            <div className="flex items-center gap-4 bg-[#0047FF]/10 px-6 py-2.5 rounded-full border border-[#0047FF]/30 text-[10px] font-black uppercase tracking-widest text-[#0047FF]">
-              <div className={`w-2.5 h-2.5 rounded-full ${
-                scanState.status === 'CONFIRMED' ? 'bg-green-500' :
-                scanState.status === 'DETECTED' ? 'bg-amber-500 animate-pulse' :
-                scanState.status === 'SCANNING' ? 'bg-[#0047FF] animate-pulse' :
-                'bg-slate-500'
-              }`} />
-              {scanState.status === 'SCANNING' ? 'MENCARI BARANG' :
-               scanState.status === 'DETECTED' ? 'MENCOCOKKAN' :
-               scanState.status === 'CONFIRMED' ? 'DITEMUKAN' :
-               'SIAP'}
+            <div className="flex items-center gap-3.5 bg-blue-500/10 px-6 py-2.5 rounded-full border border-blue-500/35 text-xs font-extrabold uppercase tracking-wider text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] backdrop-blur-md">
+              <div className="relative flex h-2.5 w-2.5">
+                {scanState.status !== 'IDLE' && (
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    scanState.status === 'CONFIRMED' ? 'bg-emerald-400' :
+                    scanState.status === 'DETECTED' ? 'bg-amber-400' :
+                    'bg-blue-400'
+                  }`} />
+                )}
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  scanState.status === 'CONFIRMED' ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' :
+                  scanState.status === 'DETECTED' ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' :
+                  scanState.status === 'SCANNING' ? 'bg-blue-400 shadow-[0_0_8px_#60a5fa]' :
+                  'bg-slate-500'
+                }`} />
+              </div>
+              <span>
+                {scanState.status === 'SCANNING' ? 'MENCARI BARANG' :
+                 scanState.status === 'DETECTED' ? 'MENCOCOKKAN' :
+                 scanState.status === 'CONFIRMED' ? 'DITEMUKAN' :
+                 'SIAP'}
+              </span>
             </div>
           </div>
         </div>

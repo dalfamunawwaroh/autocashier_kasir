@@ -54,8 +54,7 @@ interface Product {
   ai_label: string;
   category?: string;
   image?: string;
-}
-
+} 
 interface CartItem extends Product {
   quantity: number;
   subtotal: number;
