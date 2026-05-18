@@ -359,7 +359,7 @@ export default function CameraScannerPage() {
           const productId = productData?.id || label;
 
            // Play success sound
-          new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3').play().catch(() => {});
+          new Audio('/Apple-Pay-Face-ID-Ding-Sound-Effect.mp3').play().catch(() => {});
 
           setScanState(prev => ({ ...prev, status: 'CONFIRMED' }));
 
