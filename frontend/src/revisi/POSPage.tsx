@@ -391,10 +391,7 @@ export default function POSPage({ user }: POSPageProps) {
   const handleCheckout = () => {
     if (cart.length === 0) return;
     
-    const activeBranch = localStorage.getItem('autocashier_branch') || 'Cabang Bandung';
-    let branchCode = 'BDG';
-    if (activeBranch.includes('Jakarta')) branchCode = 'JKT';
-    if (activeBranch.includes('Surabaya')) branchCode = 'SBY';
+    const branchCode = localStorage.getItem('autocashier_branch_code') || 'BDG';
     
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -407,7 +404,7 @@ export default function POSPage({ user }: POSPageProps) {
 
   const handleFinalizePayment = async () => {
     try {
-      const activeBranch = localStorage.getItem('autocashier_branch') || 'Cabang Bandung';
+      const branchId = localStorage.getItem('autocashier_branch_id') || null;
       const payload = {
         header: {
           invoice_number: invoiceNumber,
@@ -416,7 +413,7 @@ export default function POSPage({ user }: POSPageProps) {
           cash_received: Number(cashReceived) || 0,
           cash_return: Math.max(0, Number(cashReceived) - totalAmount),
           cashier_name: user?.name || 'Unknown',
-          branch: activeBranch
+          branch_id: branchId
         },
         items: cart.map(item => ({
           product_id: item.id,

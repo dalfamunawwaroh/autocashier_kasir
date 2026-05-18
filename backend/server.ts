@@ -249,19 +249,13 @@ async function startServer() {
       }
 
       let invoiceNumber = header.invoice_number;
-      if (invoiceNumber && !invoiceNumber.includes("BDG")) {
-        if (invoiceNumber.startsWith("INV-")) {
-          invoiceNumber = invoiceNumber.replace("INV-", "INV-BDG-");
-        } else if (invoiceNumber.startsWith("AC-")) {
-          invoiceNumber = invoiceNumber.replace("AC-", "AC-BDG-");
-        } else {
-          invoiceNumber = `BDG-${invoiceNumber}`;
-        }
+      if (!invoiceNumber) {
+        invoiceNumber = `AC-${Date.now()}`;
       }
 
       const { data: transaction, error: txError } = await supabase.from('transactions').insert([{
         invoice_number: invoiceNumber,
-        branch: header.branch || 'Cabang Bandung',
+        branch_id: header.branch_id || null,
         total_price: header.total_price,
         payment_method: header.payment_method,
         receipt_url: receiptUrl,
@@ -423,6 +417,18 @@ async function startServer() {
       res.json({ success: true, data: { total_revenue: totalRevenue, total_orders: transactions.length, aov: transactions.length > 0 ? (totalRevenue / transactions.length) : 0 } });
     } catch (error) {
       res.status(500).json({ success: false, message: "Server error" });
+    }
+  });
+
+  // GET Branches
+  app.get("/api/branches", async (req, res) => {
+    try {
+      const { data: branches, error } = await supabase.from('branches').select('id, name, code').eq('is_active', true);
+      if (error) throw error;
+      res.json({ success: true, data: branches });
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+      res.status(500).json({ success: false, message: "Failed to load branches" });
     }
   });
 

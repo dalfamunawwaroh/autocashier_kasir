@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, ShieldCheck, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,6 +8,24 @@ export default function ProfilePage({ user, onUpdate }: { user: any, onUpdate: (
   const [fullName, setFullName] = useState(user?.name || '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [branches, setBranches] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/branches')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setBranches(data.data);
+          
+          // Auto-select first branch if none selected
+          if (!localStorage.getItem('autocashier_branch_id') && data.data.length > 0) {
+            localStorage.setItem('autocashier_branch_id', data.data[0].id);
+            localStorage.setItem('autocashier_branch_code', data.data[0].code);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load branches:', err));
+  }, []);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,18 +114,24 @@ export default function ProfilePage({ user, onUpdate }: { user: any, onUpdate: (
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Cabang Aktif</label>
               <select
-                value={localStorage.getItem('autocashier_branch') || 'Cabang Bandung'}
+                value={localStorage.getItem('autocashier_branch_id') || ''}
                 onChange={(e) => {
-                  localStorage.setItem('autocashier_branch', e.target.value);
-                  toast.success(`Cabang aktif diubah menjadi ${e.target.value}`);
-                  // Force a re-render by updating state (though not strictly necessary for this simple implementation)
-                  setFullName(fullName); 
+                  const selectedBranch = branches.find(b => b.id === e.target.value);
+                  if (selectedBranch) {
+                    localStorage.setItem('autocashier_branch_id', selectedBranch.id);
+                    localStorage.setItem('autocashier_branch_code', selectedBranch.code);
+                    toast.success(`Cabang aktif diubah menjadi ${selectedBranch.name}`);
+                    setFullName(fullName); // Force re-render
+                  }
                 }}
                 className="w-full bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-neon-blue transition-all appearance-none"
               >
-                <option value="Cabang Bandung">Cabang Bandung</option>
-                <option value="Cabang Jakarta">Cabang Jakarta</option>
-                <option value="Cabang Surabaya">Cabang Surabaya</option>
+                <option value="" disabled>Pilih Cabang</option>
+                {branches.map(branch => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name} ({branch.code})
+                  </option>
+                ))}
               </select>
             </div>
 
