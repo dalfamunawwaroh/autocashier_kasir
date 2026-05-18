@@ -39,10 +39,12 @@ async function startServer() {
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) return res.status(401).json({ success: false, message: "Invalid credentials" });
       let branchCode = 'BDG';
+      let branchName = 'Bandung';
       if (user.branch_id) {
-        const { data: branch } = await supabase.from('branches').select('code').eq('id', user.branch_id).single();
+        const { data: branch } = await supabase.from('branches').select('code, name').eq('id', user.branch_id).single();
         if (branch) {
           branchCode = branch.code;
+          branchName = branch.name;
         }
       }
       
@@ -54,7 +56,8 @@ async function startServer() {
           role: user.role, 
           username: user.username, 
           branch_id: user.branch_id,
-          branch_code: branchCode
+          branch_code: branchCode,
+          branch_name: branchName
         } 
       });
     } catch (error) {

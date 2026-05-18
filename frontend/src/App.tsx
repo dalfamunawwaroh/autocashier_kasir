@@ -39,6 +39,7 @@ function App() {
           if (data.success && data.data.length > 0) {
             localStorage.setItem('autocashier_branch_id', data.data[0].id);
             localStorage.setItem('autocashier_branch_code', data.data[0].code);
+            localStorage.setItem('autocashier_branch_name', data.data[0].name);
             console.log(`[App] Auto-selected default branch: ${data.data[0].name} (${data.data[0].code})`);
           }
         })
