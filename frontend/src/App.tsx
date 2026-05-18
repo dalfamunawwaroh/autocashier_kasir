@@ -14,12 +14,36 @@ import ReceiptVerificationPage from './pages/POS/ReceiptVerificationPage';
 
 
 
+import LoginPage from './pages/Auth/LoginPage';
+
+// Simple ProtectedRoute wrapper
+const ProtectedRoute = ({ children, user }: { children: React.ReactNode; user: any }) => {
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
 function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const { user } = useAppStore(); // Migrated to Zustand from local useState
+  const { user, setIdentity } = useAppStore();
 
   useEffect(() => {
     setIsAuthReady(true);
+    
+    // Auto-fetch branch globally if missing in localStorage
+    if (!localStorage.getItem('autocashier_branch_id')) {
+      fetch('/api/branches')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data.length > 0) {
+            localStorage.setItem('autocashier_branch_id', data.data[0].id);
+            localStorage.setItem('autocashier_branch_code', data.data[0].code);
+            console.log(`[App] Auto-selected default branch: ${data.data[0].name} (${data.data[0].code})`);
+          }
+        })
+        .catch(err => console.error('[App] Failed to auto-fetch branches:', err));
+    }
   }, []);
 
   if (!isAuthReady) {
@@ -34,18 +58,21 @@ function App() {
     <Router>
       <div className="min-h-screen bg-mesh text-slate-900 dark:text-slate-200 transition-colors duration-500">
         <Toaster position="top-right" richColors />
-        <NavbarWrapper user={user} onLogout={() => {}} />
+        <NavbarWrapper user={user} onLogout={() => setIdentity(null as any, false)} />
         
         <Routes>
           {/* Main Terminal Entry */}
           <Route path="/" element={<LandingPage />} />
           
-          {/* VISION-FIRST POS FLOW */}
-          <Route path="/scan" element={<CameraScannerPage />} />
-          <Route path="/identity-check" element={<IdentityCheckPage />} />
-          <Route path="/cart" element={<CartSummaryPage />} />
-          <Route path="/payment" element={<PaymentQRISPage />} />
-          <Route path="/verify-receipt" element={<ReceiptVerificationPage />} />
+          {/* Public Login Route */}
+          <Route path="/login" element={<LoginPage onLogin={(userData) => setIdentity(userData, false)} />} />
+          
+          {/* VISION-FIRST POS FLOW (PROTECTED) */}
+          <Route path="/scan" element={<ProtectedRoute user={user}><CameraScannerPage /></ProtectedRoute>} />
+          <Route path="/identity-check" element={<ProtectedRoute user={user}><IdentityCheckPage /></ProtectedRoute>} />
+          <Route path="/cart" element={<ProtectedRoute user={user}><CartSummaryPage /></ProtectedRoute>} />
+          <Route path="/payment" element={<ProtectedRoute user={user}><PaymentQRISPage /></ProtectedRoute>} />
+          <Route path="/verify-receipt" element={<ProtectedRoute user={user}><ReceiptVerificationPage /></ProtectedRoute>} />
           
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

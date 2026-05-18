@@ -38,7 +38,25 @@ async function startServer() {
       if (error || !user) return res.status(401).json({ success: false, message: "Invalid credentials" });
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) return res.status(401).json({ success: false, message: "Invalid credentials" });
-      res.json({ success: true, user: { id: user.id, name: user.full_name, role: user.role, username: user.username } });
+      let branchCode = 'BDG';
+      if (user.branch_id) {
+        const { data: branch } = await supabase.from('branches').select('code').eq('id', user.branch_id).single();
+        if (branch) {
+          branchCode = branch.code;
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        user: { 
+          id: user.id, 
+          name: user.full_name, 
+          role: user.role, 
+          username: user.username, 
+          branch_id: user.branch_id,
+          branch_code: branchCode
+        } 
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ success: false, message: "Server error" });

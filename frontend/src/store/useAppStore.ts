@@ -7,11 +7,11 @@ export type Theme = 'dark' | 'light';
 interface AppState {
   language: Language;
   theme: Theme;
-  user: { id?: string; name: string; role: string; phone?: string } | null;
+  user: { id?: string; name: string; role: string; phone?: string; branch_id?: string; branch_code?: string } | null;
   isMember: boolean;
   toggleLanguage: () => void;
   setTheme: (theme: Theme) => void;
-  setIdentity: (user: { id?: string; name: string; role: string; phone?: string }, isMember: boolean) => void;
+  setIdentity: (user: { id?: string; name: string; role: string; phone?: string; branch_id?: string; branch_code?: string }, isMember: boolean) => void;
   clearSession: () => void;
   setIsMember: (val: boolean) => void;
   setLanguage: (lang: Language) => void;

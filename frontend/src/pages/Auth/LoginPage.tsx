@@ -6,7 +6,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { toast } from 'sonner';
 
 interface LoginPageProps {
-  onLogin: (user: { name: string; role: string; phone?: string }) => void;
+  onLogin: (user: { name: string; role: string; phone?: string; branch_id?: string; branch_code?: string }) => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
@@ -72,7 +72,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         if (res.ok && data.success) {
           // Pass the authenticated user data to the store
           const role = data.user.role || 'admin';
-          onLogin({ name: data.user.name || cleanUsername, role, phone: cleanUsername });
+          
+          if (data.user.branch_id) {
+            localStorage.setItem('autocashier_branch_id', data.user.branch_id);
+            localStorage.setItem('autocashier_branch_code', data.user.branch_code || 'BDG');
+            console.log(`[Login] Selected user branch: ${data.user.branch_code}`);
+          }
+          
+          onLogin({ 
+            name: data.user.name || cleanUsername, 
+            role, 
+            phone: cleanUsername,
+            branch_id: data.user.branch_id,
+            branch_code: data.user.branch_code
+          });
         } else {
           toast.error(data.error || 'Login gagal, periksa username/password');
         }
