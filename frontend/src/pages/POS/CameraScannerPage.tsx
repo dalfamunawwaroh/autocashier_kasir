@@ -294,6 +294,7 @@ export default function CameraScannerPage() {
       });
 
       const data = await response.json();
+      console.log("[SCANNER DEBUG] detect response payload:", data);
 
       if (data.success && data.label) {
         console.log(`[SCAN] Detected: ${data.label} (${(data.confidence * 100).toFixed(1)}%) via ${data.source}`);

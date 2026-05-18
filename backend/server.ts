@@ -127,13 +127,29 @@ async function startServer() {
               const { data } = await query;
               if (data) {
                 product = data;
-                console.log(`[VISION] 📦 Supabase: '${product.name}' Rp${product.price}`);
+                if (!product.image_url) {
+                  try {
+                    const { data: imgData } = await supabase
+                      .from("product_images")
+                      .select("image_url")
+                      .eq("product_id", product.id)
+                      .limit(1);
+                    if (imgData && imgData.length > 0) {
+                      product.image_url = imgData[0].image_url;
+                      console.log(`[VISION] 📦 Fallback image_url found from product_images table: ${product.image_url}`);
+                    }
+                  } catch (imgErr) {
+                    console.warn("[VISION] product_images lookup failed:", imgErr);
+                  }
+                }
+                console.log(`[VISION] 📦 Supabase: '${product.name}' Rp${product.price} | image_url: ${product.image_url}`);
               }
             } catch (dbErr) {
               console.warn("[VISION] DB lookup failed:", dbErr);
             }
           }
 
+          console.log(`[API DETECT] Returning product payload:`, product);
           return res.json({ success: true, source, label, confidence, similarity, bbox, product });
         }
 

@@ -191,9 +191,9 @@ export default function CartSummaryPage() {
                     <div className="flex items-center justify-between gap-4 w-full">
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform duration-300 bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-                          {item.image ? (
+                          {(item.image || item.image_url) ? (
                             <img 
-                              src={item.image} 
+                              src={item.image || item.image_url} 
                               alt={item.name} 
                               className="w-full h-full object-cover" 
                               onError={(e) => {
