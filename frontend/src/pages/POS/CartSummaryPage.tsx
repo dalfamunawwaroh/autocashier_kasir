@@ -185,37 +185,62 @@ export default function CartSummaryPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.1 }}
                     key={idx}
-                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-white/5 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/10 group hover:border-[#0047FF]/50 hover:bg-white/10 transition-all shadow-sm"
+                    className="bg-slate-50/40 dark:bg-white/5 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/10 group hover:border-[#0047FF]/40 hover:bg-white/10 transition-all shadow-sm space-y-4"
                   >
-                    <div className="flex items-center gap-4 flex-1 min-w-0 w-full">
-                      <div className="w-16 h-16 bg-gradient-to-br from-[#0047FF]/10 to-[#0047FF]/20 rounded-2xl flex items-center justify-center border border-[#0047FF]/20 shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
-                        <span className="text-2xl">🛍️</span>
+                    {/* Top Row: Product Icon, Name, and Subtotal */}
+                    <div className="flex items-center justify-between gap-4 w-full">
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                        <div className="w-12 h-12 bg-gradient-to-br from-[#0047FF]/10 to-[#0047FF]/20 rounded-2xl flex items-center justify-center border border-[#0047FF]/20 shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
+                          <span className="text-xl">🛍️</span>
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <h4 className="font-black text-base tracking-tight leading-tight uppercase group-hover:text-[#0047FF] transition-colors text-slate-900 dark:text-white break-words">
+                            {item.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest px-2.5 py-0.5 rounded-md">
+                              AI Verified
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="font-black text-sm tracking-tight leading-tight uppercase group-hover:text-[#0047FF] transition-colors text-slate-900 dark:text-white truncate">{item.name}</h4>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold tracking-widest mt-1.5 leading-none">
-                          Rp {item.price.toLocaleString('id-ID')} <span className="opacity-50">/ pcs</span>
-                        </p>
+
+                      {/* Subtotal on the Right */}
+                      <div className="text-right flex-shrink-0 pl-2">
+                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 leading-none mb-1 uppercase tracking-widest">Subtotal</p>
+                        <p className="text-[#0047FF] font-black text-lg leading-none">Rp {(item.price * item.qty).toLocaleString('id-ID')}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                      {/* Quantity Editor Controls */}
-                      <div className="flex items-center gap-2 bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-1.5 shadow-inner">
+                    {/* Separator Line */}
+                    <div className="h-px bg-slate-200 dark:bg-white/5 w-full" />
+
+                    {/* Bottom Row: Price per Unit and Interactive Controls */}
+                    <div className="flex items-center justify-between gap-4 w-full pt-1">
+                      {/* Price per unit */}
+                      <div className="text-left">
+                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 leading-none mb-1 uppercase tracking-widest">Harga Satuan</p>
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-300">
+                          Rp {item.price.toLocaleString('id-ID')} <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tracking-normal">/ pcs</span>
+                        </p>
+                      </div>
+
+                      {/* Interactive Quantity Controls */}
+                      <div className="flex items-center gap-2 bg-slate-100 dark:bg-black/25 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-1.5 shadow-inner">
                         <button 
                           onClick={() => handleDecreaseQty(idx)}
                           className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all cursor-pointer"
-                          title="Kurangi"
+                          title="Kurangi Kuantitas"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
                         
-                        <span className="text-[#0047FF] font-black text-base min-w-[24px] text-center">{item.qty}</span>
+                        <span className="text-[#0047FF] font-black text-base min-w-[28px] text-center">{item.qty}</span>
                         
                         <button 
                           onClick={() => handleIncreaseQty(idx)}
                           className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all cursor-pointer"
-                          title="Tambah"
+                          title="Tambah Kuantitas"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -225,15 +250,10 @@ export default function CartSummaryPage() {
                         <button 
                           onClick={() => handleRemoveItem(idx)}
                           className="p-1.5 rounded-xl text-rose-400 hover:text-rose-600 hover:bg-rose-500/10 transition-all cursor-pointer"
-                          title="Hapus"
+                          title="Hapus Barang"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
-                      </div>
-
-                      <div className="text-right pl-2 min-w-[90px]">
-                        <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 leading-none mb-1 uppercase tracking-wider">Subtotal</p>
-                        <p className="text-[#0047FF] font-black text-base leading-none">Rp {(item.price * item.qty).toLocaleString('id-ID')}</p>
                       </div>
                     </div>
                   </motion.div>
