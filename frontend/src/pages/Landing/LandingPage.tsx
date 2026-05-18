@@ -57,7 +57,7 @@ export default function LandingPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-primary"></span>
             </span>
-            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">Next-Gen POS for Koperasi GIAT</span>
+            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">Next-Gen POS for Koperasi GIAT Bandung</span>
           </div>
 
           <h1 className="text-5xl md:text-8xl font-black mb-6 tracking-tight leading-[1.1] text-slate-900 dark:text-white font-heading">
@@ -66,7 +66,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 font-medium mb-12 max-w-2xl mx-auto leading-relaxed">
-            Revolutionizing Koperasi GIAT with Computer Vision. Letakkan barang, scan otomatis, dan selesaikan pembayaran tanpa antre.
+            Revolutionizing Koperasi GIAT Cabang Bandung with Computer Vision. Letakkan barang, scan otomatis, dan selesaikan pembayaran tanpa antre.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
@@ -307,7 +307,7 @@ export default function LandingPage() {
               <Logo />
             </div>
             <p className="text-slate-600 dark:text-slate-500 max-w-sm leading-relaxed mb-8">
-              Solusi Point of Sales berbasis Computer Vision untuk modernisasi Koperasi GIAT. Dibangun dengan fokus pada kecepatan, akurasi, dan kemandirian.
+              Solusi Point of Sales berbasis Computer Vision untuk modernisasi Koperasi GIAT Cabang Bandung. Dibangun dengan fokus pada kecepatan, akurasi, dan kemandirian.
             </p>
             <div className="flex gap-4">
               {['Instagram', 'LinkedIn', 'Github'].map(social => (

@@ -54,7 +54,7 @@ export default function DashboardPage({ user }: DashboardPageProps) {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
           <div>
             <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight font-heading">Admin Dashboard</h1>
-            <p className="text-slate-600 dark:text-slate-400 font-medium">Pantau performa Koperasi GIAT secara real-time.</p>
+            <p className="text-slate-600 dark:text-slate-400 font-medium">Pantau performa Koperasi GIAT Bandung secara real-time.</p>
           </div>
           <div className="flex items-center gap-3 bg-slate-100 dark:bg-white/5 p-3 rounded-2xl border border-slate-200 dark:border-white/10 backdrop-blur-md">
             <Calendar className="w-5 h-5 text-brand-primary ml-2" />

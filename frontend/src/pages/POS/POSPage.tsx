@@ -98,7 +98,7 @@ export default function POSPage({ user }: POSPageProps) {
   const isDark = theme === 'dark';
   const [isSyncing, setIsSyncing] = useState(true);
   const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [storeName, setStoreName] = useState('Koperasi GIAT Modern AI Point of Sale System');
+  const [storeName, setStoreName] = useState('Koperasi GIAT Cabang Bandung - AI POS');
   const [scanLogs, setScanLogs] = useState<{ time: string; msg: string; color: string }[]>([
     { time: new Date().toLocaleTimeString('en-GB', { hour12: false }), msg: 'System initialized...', color: 'text-slate-400' }
   ]);

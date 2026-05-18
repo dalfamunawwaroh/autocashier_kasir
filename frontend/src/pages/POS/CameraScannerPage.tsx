@@ -502,7 +502,7 @@ export default function CameraScannerPage() {
       {/* Header */}
       <div className="absolute top-0 inset-x-0 p-8 z-20">
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
-          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">Koperasi Giat <span className="text-[#0047FF]">SCANNER</span></div>
+          <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">Koperasi Giat Bandung <span className="text-[#0047FF]">SCANNER</span></div>
 
           {/* Vision pipeline & status badges */}
           <div className="flex items-center gap-3">
