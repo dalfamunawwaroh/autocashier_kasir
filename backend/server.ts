@@ -117,7 +117,7 @@ async function startServer() {
           let product = visionData.product || null;
           const productId = visionData.product_id || null;
 
-          if (!product?.price && label) {
+          if (label) {
             try {
               const query = productId
                 ? supabase.from("products").select("*").eq("id", productId).maybeSingle()
@@ -127,8 +127,20 @@ async function startServer() {
               const { data } = await query;
               if (data) {
                 product = data;
-                if (!product.image_url) {
-                  try {
+                
+                // ALWAYS prioritize the FRONT angle photo of the product if it exists in product_images
+                try {
+                  const { data: frontImg } = await supabase
+                    .from("product_images")
+                    .select("image_url")
+                    .eq("product_id", product.id)
+                    .eq("angle", "front")
+                    .maybeSingle();
+                  if (frontImg) {
+                    product.image_url = frontImg.image_url;
+                    console.log(`[VISION] 📦 Prioritized front image_url from product_images: ${product.image_url}`);
+                  } else if (!product.image_url) {
+                    // Fall back to first image from product_images if main image_url is empty
                     const { data: imgData } = await supabase
                       .from("product_images")
                       .select("image_url")
@@ -136,12 +148,13 @@ async function startServer() {
                       .limit(1);
                     if (imgData && imgData.length > 0) {
                       product.image_url = imgData[0].image_url;
-                      console.log(`[VISION] 📦 Fallback image_url found from product_images table: ${product.image_url}`);
+                      console.log(`[VISION] 📦 Fallback first image_url from product_images: ${product.image_url}`);
                     }
-                  } catch (imgErr) {
-                    console.warn("[VISION] product_images lookup failed:", imgErr);
                   }
+                } catch (imgErr) {
+                  console.warn("[VISION] product_images lookup failed:", imgErr);
                 }
+                
                 console.log(`[VISION] 📦 Supabase: '${product.name}' Rp${product.price} | image_url: ${product.image_url}`);
               }
             } catch (dbErr) {

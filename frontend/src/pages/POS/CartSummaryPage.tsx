@@ -197,6 +197,7 @@ export default function CartSummaryPage() {
                               alt={item.name} 
                               className="w-full h-full object-cover" 
                               onError={(e) => {
+                                console.error(`[IMAGE LOAD FAIL] Failed to load ${item.name} image:`, (e.target as HTMLImageElement).src);
                                 (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${item.label || item.id}/150/150`;
                               }}
                             />
