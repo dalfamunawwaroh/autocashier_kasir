@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingCart, ArrowRight, Lock, CheckCircle2, Coins, Ticket, Trash2, 
-  Tag, Loader2, User, Sparkles, Star 
+  Tag, Loader2, User, Sparkles, Star, Minus, Plus 
 } from 'lucide-react';
 import { useAppStore, translations } from '../../store/useAppStore';
 import { CartItem } from './CameraScannerPage';
@@ -23,9 +23,34 @@ export default function CartSummaryPage() {
   const { language, isMember, member } = useAppStore();
   const t = translations[language];
 
-  const items: CartItem[] = location.state?.items || [];
+  const [items, setItems] = useState<CartItem[]>(location.state?.items || []);
   const totalQty = items.reduce((acc, item) => acc + item.qty, 0);
   const subtotal = items.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+  // Helper functions to edit cart items manually
+  const handleIncreaseQty = (index: number) => {
+    setItems(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], qty: next[index].qty + 1 };
+      return next;
+    });
+  };
+
+  const handleDecreaseQty = (index: number) => {
+    setItems(prev => {
+      const next = [...prev];
+      if (next[index].qty > 1) {
+        next[index] = { ...next[index], qty: next[index].qty - 1 };
+        return next;
+      } else {
+        return prev.filter((_, i) => i !== index);
+      }
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index));
+  };
 
   // Member data state
   const [memberPromos, setMemberPromos] = useState<MemberPromo[]>([]);
@@ -114,7 +139,9 @@ export default function CartSummaryPage() {
 
   return (
     <div className="min-h-screen bg-surface-light dark:bg-surface-dark bg-mesh flex justify-center items-start md:items-center p-4 md:p-10 text-slate-900 dark:text-white relative overflow-x-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-brand-primary/5 blur-[120px] pointer-events-none" />
+      {/* Dynamic and glowing ambient background */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#0047FF]/10 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-pink-500/5 rounded-full blur-[150px] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -123,17 +150,33 @@ export default function CartSummaryPage() {
       >
         {/* --- LEFT: PRODUCT DETAIL --- */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="glass-card rounded-[2.5rem] p-8 flex flex-col h-[500px] md:h-[650px]">
-            <div className="flex justify-between items-end mb-6">
-              <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900 dark:text-white">Detail Belanja</h2>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-white/5 px-3 py-1 rounded-full border border-slate-200 dark:border-white/10">{totalQty} ITEMS</span>
+          <div className="glass-card rounded-[2.5rem] p-8 flex flex-col h-[500px] md:h-[650px] shadow-2xl">
+            {/* Attractive stats bar header */}
+            <div className="flex justify-between items-center mb-8 bg-slate-50/50 dark:bg-black/25 border border-slate-200 dark:border-white/5 rounded-3xl p-5 shadow-sm">
+              <div className="text-left">
+                <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900 dark:text-white">Detail Belanja</h2>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mt-1">Konfirmasi & Edit Item Belanja</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm">{totalQty} ITEMS</span>
+                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-4 py-2 rounded-2xl border border-emerald-500/20 shadow-sm">Ready</span>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 text-left">
               {items.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center opacity-20 italic text-slate-500">
-                  <ShoppingCart className="w-16 h-16 mb-4" />
-                  <p>Keranjang Kosong</p>
+                <div className="h-full flex flex-col items-center justify-center opacity-45 text-center py-10 space-y-6">
+                  <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full flex items-center justify-center text-4xl shadow-inner animate-bounce">🛒</div>
+                  <div>
+                    <p className="text-lg font-black uppercase tracking-wider text-slate-900 dark:text-white">Keranjang Kosong</p>
+                    <p className="text-xs text-slate-500 mt-2 font-bold max-w-xs mx-auto">Semua item telah dihapus. Silakan kembali ke scanner untuk memindai belanjaan baru.</p>
+                  </div>
+                  <button 
+                    onClick={() => navigate('/scan')}
+                    className="px-8 py-3.5 bg-[#0047FF] hover:bg-[#0047FF]/80 text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all active:scale-95 shadow-lg cursor-pointer"
+                  >
+                    Kembali Ke Scanner
+                  </button>
                 </div>
               ) : (
                 items.map((item, idx) => (
@@ -142,18 +185,56 @@ export default function CartSummaryPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.1 }}
                     key={idx}
-                    className="flex items-center gap-4 bg-slate-50/50 dark:bg-white/5 p-5 rounded-[2rem] border border-slate-200 dark:border-white/10 group hover:border-neon-blue transition-all"
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50 dark:bg-white/5 p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/10 group hover:border-[#0047FF]/50 hover:bg-white/10 transition-all shadow-sm"
                   >
-                    <div className="w-14 h-14 bg-gradient-to-br from-neon-blue/10 to-accent-pink/10 rounded-2xl flex items-center justify-center border border-slate-200 dark:border-white/10 shadow-inner">
-                      <span className="text-2xl">📦</span>
+                    <div className="flex items-center gap-4 flex-1 min-w-0 w-full">
+                      <div className="w-16 h-16 bg-gradient-to-br from-[#0047FF]/10 to-[#0047FF]/20 rounded-2xl flex items-center justify-center border border-[#0047FF]/20 shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
+                        <span className="text-2xl">🛍️</span>
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-black text-sm tracking-tight leading-tight uppercase group-hover:text-[#0047FF] transition-colors text-slate-900 dark:text-white truncate">{item.name}</h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold tracking-widest mt-1.5 leading-none">
+                          Rp {item.price.toLocaleString('id-ID')} <span className="opacity-50">/ pcs</span>
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h4 className="font-black text-sm tracking-tight leading-tight uppercase group-hover:text-neon-blue transition-colors text-slate-900 dark:text-white">{item.name}</h4>
-                      <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1 italic leading-none">Rp{item.price.toLocaleString('id-ID')} / pcs</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-neon-blue font-black text-sm leading-none mb-1">x{item.qty}</p>
-                      <p className="text-xs font-bold text-slate-500 dark:text-white/40 italic leading-none">Rp{(item.price * item.qty).toLocaleString('id-ID')}</p>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
+                      {/* Quantity Editor Controls */}
+                      <div className="flex items-center gap-2 bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl px-3 py-1.5 shadow-inner">
+                        <button 
+                          onClick={() => handleDecreaseQty(idx)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all cursor-pointer"
+                          title="Kurangi"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        
+                        <span className="text-[#0047FF] font-black text-base min-w-[24px] text-center">{item.qty}</span>
+                        
+                        <button 
+                          onClick={() => handleIncreaseQty(idx)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all cursor-pointer"
+                          title="Tambah"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+
+                        <div className="h-5 w-px bg-slate-200 dark:bg-white/10 mx-1.5" />
+
+                        <button 
+                          onClick={() => handleRemoveItem(idx)}
+                          className="p-1.5 rounded-xl text-rose-400 hover:text-rose-600 hover:bg-rose-500/10 transition-all cursor-pointer"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="text-right pl-2 min-w-[90px]">
+                        <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 leading-none mb-1 uppercase tracking-wider">Subtotal</p>
+                        <p className="text-[#0047FF] font-black text-base leading-none">Rp {(item.price * item.qty).toLocaleString('id-ID')}</p>
+                      </div>
                     </div>
                   </motion.div>
                 ))
