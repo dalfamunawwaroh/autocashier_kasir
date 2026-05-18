@@ -120,7 +120,7 @@ function IdentityCheckModal({ onClose, cartItems }: IdentityCheckModalProps) {
 // --- MAIN PAGE ---
 export default function CameraScannerPage() {
   const navigate = useNavigate();
-  const { language } = useAppStore();
+  const { language, user } = useAppStore();
   const t = translations[language];
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -529,7 +529,7 @@ export default function CameraScannerPage() {
       <div className="absolute top-0 inset-x-0 p-8 z-20">
         <div className="max-w-7xl mx-auto flex justify-between items-center bg-black/40 backdrop-blur-3xl border border-white/5 rounded-[32px] px-10 py-6 text-white shadow-2xl">
           <div className="font-black text-2xl italic tracking-tighter uppercase leading-none">
-            Koperasi GIAT {localStorage.getItem('autocashier_branch_name')?.replace('Branch', '').trim() || 'Bandung'} <span className="text-[#0047FF]">SCANNER</span>
+            Koperasi GIAT {user?.branch_name?.replace('Branch', '').trim() || localStorage.getItem('autocashier_branch_name')?.replace('Branch', '').trim() || 'Bandung'} <span className="text-[#0047FF]">SCANNER</span>
           </div>
 
           {/* Vision pipeline & status badges */}
