@@ -385,10 +385,15 @@ export default function POSPage({ user }: POSPageProps) {
     if (cart.length === 0) return;
     
     // Format: AC-BDG-YYYYMMDD-SEQ (using timestamp for simplicity in SEQ)
+    const activeBranch = localStorage.getItem('autocashier_branch') || 'Cabang Bandung';
+    let branchCode = 'BDG';
+    if (activeBranch.includes('Jakarta')) branchCode = 'JKT';
+    if (activeBranch.includes('Surabaya')) branchCode = 'SBY';
+    
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const seq = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const newInvoice = `AC-BDG-${dateStr}-${seq}`;
+    const newInvoice = `AC-${branchCode}-${dateStr}-${seq}`;
     
     setInvoiceNumber(newInvoice);
     setIsCheckoutModalOpen(true);
@@ -396,6 +401,7 @@ export default function POSPage({ user }: POSPageProps) {
 
   const handleFinalizePayment = async () => {
     try {
+      const activeBranch = localStorage.getItem('autocashier_branch') || 'Cabang Bandung';
       const payload = {
         header: {
           invoice_number: invoiceNumber,
@@ -404,7 +410,7 @@ export default function POSPage({ user }: POSPageProps) {
           cash_received: Number(cashReceived) || 0,
           cash_return: Math.max(0, Number(cashReceived) - totalAmount),
           cashier_name: user?.name || 'Unknown',
-          branch: 'Cabang Bandung'
+          branch: activeBranch
         },
         items: cart.map(item => ({
           product_id: item.id,

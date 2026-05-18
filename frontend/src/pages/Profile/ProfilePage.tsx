@@ -93,6 +93,24 @@ export default function ProfilePage({ user, onUpdate }: { user: any, onUpdate: (
               />
             </div>
 
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold text-slate-600 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Cabang Aktif</label>
+              <select
+                value={localStorage.getItem('autocashier_branch') || 'Cabang Bandung'}
+                onChange={(e) => {
+                  localStorage.setItem('autocashier_branch', e.target.value);
+                  toast.success(`Cabang aktif diubah menjadi ${e.target.value}`);
+                  // Force a re-render by updating state (though not strictly necessary for this simple implementation)
+                  setFullName(fullName); 
+                }}
+                className="w-full bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-6 py-4 rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-neon-blue transition-all appearance-none"
+              >
+                <option value="Cabang Bandung">Cabang Bandung</option>
+                <option value="Cabang Jakarta">Cabang Jakarta</option>
+                <option value="Cabang Surabaya">Cabang Surabaya</option>
+              </select>
+            </div>
+
             <button 
               type="submit" 
               disabled={loading}

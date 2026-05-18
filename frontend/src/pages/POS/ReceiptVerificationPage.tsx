@@ -88,11 +88,15 @@ export default function ReceiptVerificationPage() {
         try {
           const receiptBase64 = captureReceipt();
           const stateData = location.state || {};
+          const activeBranch = localStorage.getItem('autocashier_branch') || 'Cabang Bandung';
+          let branchCode = 'BDG';
+          if (activeBranch.includes('Jakarta')) branchCode = 'JKT';
+          if (activeBranch.includes('Surabaya')) branchCode = 'SBY';
           
           // Data yang akan dikirim ke backend
           const payload = {
             header: {
-              invoice_number: `INV-BDG-${Date.now()}`,
+              invoice_number: `INV-${branchCode}-${Date.now()}`,
               total_price: stateData.total || 0,
               payment_method: 'QRIS',
               cash_received: stateData.total || 0,
@@ -101,7 +105,7 @@ export default function ReceiptVerificationPage() {
               member_id: stateData.memberId || null,
               promo_id: stateData.promoId || null,
               points_used: stateData.pointsUsed || 0,
-              branch: 'Cabang Bandung'
+              branch: activeBranch
             },
             items: stateData.items || [],
             receiptBase64: receiptBase64
