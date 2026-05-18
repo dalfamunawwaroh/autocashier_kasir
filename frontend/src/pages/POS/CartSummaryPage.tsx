@@ -190,24 +190,8 @@ export default function CartSummaryPage() {
                     {/* Top Row: Product Icon, Name, and Subtotal */}
                     <div className="flex items-center justify-between gap-4 w-full">
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                        <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform duration-300 bg-slate-100 dark:bg-white/5 flex items-center justify-center">
-                          {(item.image || item.image_url) ? (
-                            <img 
-                              src={item.image || item.image_url} 
-                              alt={item.name} 
-                              className="w-full h-full object-cover" 
-                              onError={(e) => {
-                                console.error(`[IMAGE LOAD FAIL] Failed to load ${item.name} image:`, (e.target as HTMLImageElement).src);
-                                (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${item.label || item.id}/150/150`;
-                              }}
-                            />
-                          ) : (
-                            <img 
-                              src={`https://picsum.photos/seed/${item.label || item.id}/150/150`} 
-                              alt={item.name} 
-                              className="w-full h-full object-cover"
-                            />
-                          )}
+                        <div className="w-14 h-14 rounded-2xl border border-[#0047FF]/20 dark:border-[#0047FF]/30 shadow-inner flex-shrink-0 group-hover:scale-105 transition-transform duration-300 bg-[#0047FF]/5 dark:bg-[#0047FF]/10 flex items-center justify-center text-[#0047FF]">
+                          <Tag className="w-6 h-6 animate-pulse" />
                         </div>
                         <div className="min-w-0 flex-1 text-left">
                           <h4 className="font-black text-base tracking-tight leading-tight uppercase group-hover:text-[#0047FF] transition-colors text-slate-900 dark:text-white break-words">
