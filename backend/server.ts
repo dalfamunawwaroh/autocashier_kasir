@@ -315,16 +315,25 @@ async function startServer() {
       if (txError) throw txError;
 
       for (const item of items) {
-        await supabase.from('transaction_items').insert([{
+        // Support both `qty` (CartItem) and `quantity` (legacy) field names
+        const qty = item.qty ?? item.quantity ?? 1;
+        const productId = item.id || item.product_id;
+
+        const { error: itemError } = await supabase.from('transaction_items').insert([{
           transaction_id: transaction.id,
-          product_id: item.id || item.product_id,
+          product_id: productId,
           unit_price: item.price,
-          quantity: item.quantity
+          quantity: qty,
+          subtotal: item.price * qty
         }]);
 
-        const { data: product } = await supabase.from('products').select('stock').eq('id', item.id || item.product_id).single();
+        if (itemError) {
+          console.error(`[CHECKOUT] Failed to insert transaction_item for product ${productId}:`, itemError);
+        }
+
+        const { data: product } = await supabase.from('products').select('stock').eq('id', productId).single();
         if (product) {
-          await supabase.from('products').update({ stock: product.stock - item.quantity }).eq('id', item.id || item.product_id);
+          await supabase.from('products').update({ stock: product.stock - qty }).eq('id', productId);
         }
       }
 
