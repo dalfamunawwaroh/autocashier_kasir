@@ -4,16 +4,40 @@ import { persist } from 'zustand/middleware';
 export type Language = 'id' | 'en';
 export type Theme = 'dark' | 'light';
 
+/** Authenticated cashier/admin user from the backend. */
+export interface AuthUser {
+  id?: string;
+  name: string;
+  role: string;
+  phone?: string;
+  branch_id?: string;
+  branch_code?: string;
+  branch_name?: string;
+}
+
+/** Identified member (customer) for the current POS session. */
+export interface MemberUser {
+  id?: string;
+  name: string;
+  phone?: string;
+}
+
 interface AppState {
   language: Language;
   theme: Theme;
-  user: { id?: string; name: string; role: string; phone?: string; branch_id?: string; branch_code?: string; branch_name?: string } | null;
-  member: { id?: string; name: string; phone?: string } | null;
+  /** The logged-in cashier/admin. Null when not authenticated. */
+  user: AuthUser | null;
+  /** The identified customer for the current transaction. Null if guest. */
+  member: MemberUser | null;
   isMember: boolean;
+
   toggleLanguage: () => void;
   setTheme: (theme: Theme) => void;
-  setIdentity: (user: { id?: string; name: string; role: string; phone?: string; branch_id?: string; branch_code?: string; branch_name?: string }, isMember: boolean) => void;
-  setMemberIdentity: (member: { id?: string; name: string; phone?: string } | null, isMember: boolean) => void;
+  /** Set the authenticated cashier/admin and their member status. */
+  setIdentity: (user: AuthUser, isMember: boolean) => void;
+  /** Set the identified customer (member) for the current POS session. */
+  setMemberIdentity: (member: MemberUser | null, isMember: boolean) => void;
+  /** Clear current transaction member session without logging out the cashier. */
   clearSession: () => void;
   setIsMember: (val: boolean) => void;
   setLanguage: (lang: Language) => void;
@@ -28,27 +52,15 @@ export const useAppStore = create<AppState>()(
       member: null,
       isMember: false,
 
-      // Actions
       toggleLanguage: () => set((state) => ({ language: state.language === 'id' ? 'en' : 'id' })),
-      
       setTheme: (theme) => set({ theme }),
-      
       setIdentity: (user, isMember) => set({ user, isMember }),
-      
       setMemberIdentity: (member, isMember) => set({ member, isMember }),
-      
       setIsMember: (val) => set({ isMember: val }),
-
       setLanguage: (lang) => set({ language: lang }),
-
-      clearSession: () => set({ 
-        member: null, 
-        isMember: false 
-      }),
+      clearSession: () => set({ member: null, isMember: false }),
     }),
-    { 
-      name: 'app-settings' // Nama key di LocalStorage
-    }
+    { name: 'app-settings' }
   )
 );
 

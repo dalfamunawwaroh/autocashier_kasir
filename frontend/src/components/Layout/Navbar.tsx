@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ShoppingCart, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from 'next-themes';
@@ -11,7 +11,6 @@ interface NavbarProps {
 }
 
 export default function Navbar({ user, onLogout }: NavbarProps) {
-  const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
 

@@ -48,6 +48,7 @@ DINO_MODEL      = os.environ.get("DINO_MODEL", "facebook/dinov2-base")
 EMBED_DB_PATH   = Path("vision_embeddings.json")
 SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.15"))
 SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.40"))
+CONF_GAP_THR    = float(os.environ.get("DINO_GAP_THR",  "0.04"))   # Min gap #1-#2 agar tidak ambiguous
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Supabase config (dari .env atau environment)
@@ -171,20 +172,33 @@ class EmbedDB:
         }
 
     def find_best_match(self, query_emb: np.ndarray):
-        """Vectorized cosine similarity — 1 matmul, bukan N loop."""
+        """Vectorized cosine similarity — 1 matmul, bukan N loop.
+        Returns (pid, entry, best_sim, gap) — gap adalah selisih sim #1 dan #2.
+        Gap kecil = ambiguous (produk terlalu mirip).
+        """
         if self._emb_matrix is None or len(self._emb_index) == 0:
-            return None, None, -1.0
+            return None, None, -1.0, 0.0
         q = query_emb.flatten().astype(np.float32)
         q_norm = np.linalg.norm(q)
         if q_norm == 0:
-            return None, None, -1.0
+            return None, None, -1.0, 0.0
         q = q / q_norm
-        sims       = self._emb_matrix @ q          # (N,) — satu matmul
-        best_i     = int(np.argmax(sims))
-        best_sim   = float(sims[best_i])
-        best_pid   = self._emb_index[best_i]
+        sims     = self._emb_matrix @ q          # (N,) — satu matmul
+        best_i   = int(np.argmax(sims))
+        best_sim = float(sims[best_i])
+        best_pid = self._emb_index[best_i]
         best_entry = self.db.get(best_pid)
-        return best_pid, best_entry, best_sim
+
+        # Hitung gap: selisih sim terbaik vs sim terbaik dari produk LAIN
+        # (bukan hanya baris lain yang mungkin milik produk sama)
+        other_sims = [
+            float(sims[i]) for i, pid in enumerate(self._emb_index)
+            if pid != best_pid
+        ]
+        second_best = max(other_sims) if other_sims else 0.0
+        gap = best_sim - second_best
+        log.info(f"[DINO] sim={best_sim:.3f} | 2nd={second_best:.3f} | gap={gap:.3f}")
+        return best_pid, best_entry, best_sim, gap
 
     def find_by_label(self, label: str):
         label = label.lower().strip()
@@ -211,6 +225,24 @@ def _decode_b64(b64: str) -> np.ndarray:
 
 def _bgr2pil(bgr: np.ndarray) -> Image.Image:
     return Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
+
+def _sharpen_image(bgr: np.ndarray) -> np.ndarray:
+    """Pertajam gambar agar teks/logo label lebih distinktif untuk DINOv2."""
+    kernel = np.array([[ 0, -1,  0],
+                       [-1,  5, -1],
+                       [ 0, -1,  0]], dtype=np.float32)
+    return cv2.filter2D(bgr, -1, kernel)
+
+def _crop_label_zone(bgr: np.ndarray) -> np.ndarray:
+    """Crop zona label merek (40%–80% dari tinggi botol).
+    Pada umumnya merek/logo ada di bagian tengah-atas botol.
+    Dipakai sebagai sinyal tambahan untuk produk botol mirip.
+    """
+    h, w = bgr.shape[:2]
+    y1 = int(h * 0.30)   # mulai dari 30% tinggi
+    y2 = int(h * 0.75)   # sampai 75% tinggi
+    crop = bgr[y1:y2, :]  # lebar penuh
+    return crop if crop.size > 0 else bgr
 
 def _extract_embedding(pil_img: Image.Image) -> np.ndarray:
     inputs = dino_processor(images=pil_img, return_tensors="pt").to(DEVICE)
@@ -541,27 +573,43 @@ async def detect(req: DetectRequest):
         else:
             crop = bgr
 
-        query_emb              = _extract_embedding(_bgr2pil(crop))
-        pid, entry, similarity = embed_db.find_best_match(query_emb)
-        log.info(f"[DINO] Best match: '{entry['name'] if entry else 'none'}' sim={similarity:.3f}")
+        # Pertajam gambar agar teks/logo merek lebih distinktif
+        crop_sharp = _sharpen_image(crop)
+
+        # ── Pass 1: embedding dari crop penuh (tajam) ──────────────────
+        query_emb_full             = _extract_embedding(_bgr2pil(crop_sharp))
+        pid, entry, similarity, gap = embed_db.find_best_match(query_emb_full)
+        log.info(f"[DINO] Best match: '{entry['name'] if entry else 'none'}' sim={similarity:.3f} gap={gap:.3f}")
+
+        # ── Pass 2: jika gap kecil (ambiguous), pakai zona label ───────
+        if similarity >= SIMILARITY_THR and gap < CONF_GAP_THR:
+            log.info(f"[DINO] Gap={gap:.3f} < {CONF_GAP_THR} → coba label-zone crop untuk disambiguasi")
+            label_crop  = _crop_label_zone(crop_sharp)
+            query_emb_label = _extract_embedding(_bgr2pil(label_crop))
+            pid2, entry2, sim2, gap2 = embed_db.find_best_match(query_emb_label)
+            log.info(f"[DINO-label] '{entry2['name'] if entry2 else 'none'}' sim={sim2:.3f} gap={gap2:.3f}")
+
+            # Ambil hasil terbaik: kombinasikan kedua similarity
+            if sim2 >= SIMILARITY_THR:
+                # Weighted average: label crop lebih dipercaya untuk disambiguasi merek
+                combined_full  = 0.40 * similarity
+                combined_label = 0.60 * sim2
+
+                if pid2 != pid:
+                    # Dua pass berbeda pendapat — pakai yang confidence gap-nya lebih besar
+                    log.info(f"[DINO] Conflict: full→'{entry['name']}' vs label→'{entry2['name']}' | pakai gap terbesar")
+                    if gap2 > gap:
+                        pid, entry, similarity = pid2, entry2, sim2
+                        log.info(f"[DINO] Resolved → '{entry['name']}' (label-zone menang)")
+                else:
+                    # Dua pass sepakat — boost similarity
+                    similarity = min(1.0, combined_full + combined_label)
+                    log.info(f"[DINO] Kedua pass sepakat '{entry['name']}', boosted sim={similarity:.3f}")
 
         if similarity >= SIMILARITY_THR:
             source = "yolo+dino" if best_box is not None else "dino-only"
-
-            # --- CUSTOM LOGIC: Ukuran Bounding Box untuk Produk Sama Beda Ukuran ---
-            if "tel u fresh" in entry["name"].lower() or "tel-u fresh" in entry["name"].lower():
-                if best_box is not None:
-                    x1, y1, x2, y2 = best_box
-                    area = (x2 - x1) * (y2 - y1)
-                    log.info(f"[SIZE CHECK] Area Tel-U Fresh: {area:.2f} px²")
-                    target_name = "Tel-U Fresh 600ml" if area > 40000 else "Tel U Fresh 330ml"
-                    if entry["name"].lower() != target_name.lower():
-                        for p_id, p_entry in embed_db.db.items():
-                            if p_entry["name"].lower() == target_name.lower():
-                                pid, entry = p_id, p_entry
-                                log.info(f"[SIZE CHECK] Override → {target_name}")
-                                break
-            # ------------------------------------------------------------------------
+            if gap < CONF_GAP_THR:
+                source += "+label-disambig"
 
             return {
                 "success":      True,
@@ -570,7 +618,8 @@ async def detect(req: DetectRequest):
                 "label":        entry["label"],
                 "product_name": entry["name"],
                 "confidence":   best_conf,
-                "similarity":   similarity,
+                "similarity":   round(similarity, 4),
+                "gap":          round(gap, 4),
                 "bbox":         best_box_norm or [],   # [x1,y1,x2,y2] dalam [0,1]
                 "product": {"id": pid, "name": entry["name"], "label": entry["label"]},
             }
