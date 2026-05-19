@@ -254,7 +254,7 @@ export default function CameraScannerPage() {
           const productPrice = productData?.price || 0;
           const productId = productData?.id || label;
 
-           // Play success sound
+          // Play success sound
           new Audio('/Apple-Pay-Face-ID-Ding-Sound-Effect.mp3').play().catch(() => {});
 
           setScanState(prev => ({ ...prev, status: 'CONFIRMED' }));
@@ -276,26 +276,32 @@ export default function CameraScannerPage() {
 
           // After 2s, reset and resume scanning
           setTimeout(() => {
+            // Reset processing flag here so interval can fire again
+            isProcessingRef.current = false;
             setScanState({ label: null, status: 'SCANNING', confidence: 0, similarity: null, source: null, box: null });
 
             // Resume scanning
-            scanIntervalRef.current = setInterval(() => {
-              if (!isProcessingRef.current) {
-                captureAndDetect();
-              }
-            }, 1500);
+            if (!scanIntervalRef.current) {
+              scanIntervalRef.current = setInterval(() => {
+                if (!isProcessingRef.current) {
+                  captureAndDetect();
+                }
+              }, 1500);
+            }
           }, 2000);
 
         }, 800);
 
       } else {
         // Nothing detected, keep scanning
+        isProcessingRef.current = false;
         setScanState(prev => ({ ...prev, status: 'SCANNING', box: null, label: null, similarity: null, source: null }));
       }
     } catch (err) {
       console.error('[SCAN] Detection error:', err);
-    } finally {
+      // Reset hanya jika terjadi error (bukan saat deteksi berhasil)
       isProcessingRef.current = false;
+    } finally {
       setIsScanning(false);
     }
   }, []);
@@ -327,33 +333,108 @@ export default function CameraScannerPage() {
         </div>
       )}
 
-      {/* Scan Zone Overlay - shown when actively scanning */}
-      {isCameraReady && scanState.status === 'SCANNING' && !scanState.box && (
+      {/* Scan Zone Overlay - shown whenever there is no bbox to display */}
+      {isCameraReady && !scanState.box && (
         <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
           <motion.div
-            animate={{ opacity: [0.6, 1, 0.6] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="w-[60%] h-[50%] border-[3px] border-dashed border-[#0047FF] rounded-[40px] relative shadow-[0_0_30px_rgba(0,71,255,0.15)]"
+            key={scanState.status}
+            animate={
+              scanState.status === 'CONFIRMED'
+                ? { opacity: [1, 1, 0.4], scale: [1, 1.04, 1.02] }
+                : scanState.status === 'DETECTED'
+                ? { opacity: 1 }
+                : { opacity: [0.6, 1, 0.6] }
+            }
+            transition={
+              scanState.status === 'CONFIRMED'
+                ? { duration: 0.6, ease: 'easeOut' }
+                : scanState.status === 'DETECTED'
+                ? { duration: 0.25 }
+                : { duration: 2, repeat: Infinity }
+            }
+            className={`w-[60%] h-[50%] rounded-[40px] relative transition-shadow duration-300 ${
+              scanState.status === 'CONFIRMED'
+                ? 'border-[4px] border-solid border-green-500 shadow-[0_0_40px_rgba(34,197,94,0.5)]'
+                : scanState.status === 'DETECTED'
+                ? 'border-[4px] border-solid border-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.4)]'
+                : 'border-[3px] border-dashed border-[#0047FF] shadow-[0_0_30px_rgba(0,71,255,0.15)]'
+            }`}
           >
-            {/* Corner markers */}
-            <div className="absolute -top-[3px] -left-[3px] w-12 h-12 border-t-[5px] border-l-[5px] border-[#0047FF] rounded-tl-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
-            <div className="absolute -top-[3px] -right-[3px] w-12 h-12 border-t-[5px] border-r-[5px] border-[#0047FF] rounded-tr-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
-            <div className="absolute -bottom-[3px] -left-[3px] w-12 h-12 border-b-[5px] border-l-[5px] border-[#0047FF] rounded-bl-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
-            <div className="absolute -bottom-[3px] -right-[3px] w-12 h-12 border-b-[5px] border-r-[5px] border-[#0047FF] rounded-br-2xl shadow-[0_0_15px_rgba(0,71,255,0.6)]" />
+            {/* Corner markers — color follows state */}
+            {(['tl','tr','bl','br'] as const).map(corner => (
+              <div key={corner} className={`absolute w-12 h-12 transition-all duration-300 ${
+                corner === 'tl' ? '-top-[3px] -left-[3px] border-t-[5px] border-l-[5px] rounded-tl-2xl' :
+                corner === 'tr' ? '-top-[3px] -right-[3px] border-t-[5px] border-r-[5px] rounded-tr-2xl' :
+                corner === 'bl' ? '-bottom-[3px] -left-[3px] border-b-[5px] border-l-[5px] rounded-bl-2xl' :
+                                  '-bottom-[3px] -right-[3px] border-b-[5px] border-r-[5px] rounded-br-2xl'
+              } ${
+                scanState.status === 'CONFIRMED'
+                  ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.8)]'
+                  : scanState.status === 'DETECTED'
+                  ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+                  : 'border-[#0047FF] shadow-[0_0_15px_rgba(0,71,255,0.6)]'
+              }`} />
+            ))}
 
-            {/* Scan line animation */}
-            <motion.div
-              animate={{ y: [0, 250, 0] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute left-4 right-4 h-[3px] bg-gradient-to-r from-transparent via-[#0047FF] to-transparent shadow-[0_0_15px_rgba(0,71,255,0.8)] rounded-full"
-            />
+            {/* Scan line — only saat SCANNING */}
+            {scanState.status === 'SCANNING' && (
+              <motion.div
+                animate={{ y: [0, 250, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute left-4 right-4 h-[3px] bg-gradient-to-r from-transparent via-[#0047FF] to-transparent shadow-[0_0_15px_rgba(0,71,255,0.8)] rounded-full"
+              />
+            )}
+
+            {/* Confirmed fill — saat CONFIRMED tanpa bbox */}
+            {scanState.status === 'CONFIRMED' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 rounded-[36px] bg-green-500/20"
+              />
+            )}
+
+            {/* Detected fill */}
+            {scanState.status === 'DETECTED' && (
+              <motion.div
+                initial={{ height: '0%' }}
+                animate={{ height: '100%' }}
+                transition={{ duration: 0.8 }}
+                className="absolute bottom-0 left-0 right-0 rounded-b-[36px] bg-amber-400/20"
+              />
+            )}
+
+            {/* Label badge inside zone — tampil saat DETECTED/CONFIRMED tanpa bbox */}
+            {(scanState.status === 'DETECTED' || scanState.status === 'CONFIRMED') && scanState.label && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`absolute -top-12 left-0 px-4 py-2 rounded-xl text-white text-xs font-black flex items-center gap-2 ${
+                  scanState.status === 'CONFIRMED' ? 'bg-green-500' : 'bg-amber-500'
+                }`}
+              >
+                {scanState.status === 'CONFIRMED'
+                  ? <ShieldCheck className="w-4 h-4" />
+                  : <Scan className="w-4 h-4 animate-spin" />
+                }
+                {scanState.label.toUpperCase()}
+                {scanState.confidence > 0 && (
+                  <span className="opacity-60 ml-1">{(scanState.confidence * 100).toFixed(0)}%</span>
+                )}
+                {scanState.similarity != null && (
+                  <span className="opacity-50 ml-0.5 text-[9px]">Akurasi:{(scanState.similarity * 100).toFixed(0)}%</span>
+                )}
+              </motion.div>
+            )}
           </motion.div>
 
-          {/* Instruction text */}
-          <div className="absolute bottom-[32%] flex items-center gap-3 bg-black/75 backdrop-blur-md px-6 py-3 rounded-full text-white font-black text-sm uppercase tracking-widest border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-20">
-            <Camera className="w-5 h-5 text-[#0047FF]" />
-            <span>Arahkan barang ke kamera</span>
-          </div>
+          {/* Instruction text — hanya saat SCANNING */}
+          {scanState.status === 'SCANNING' && (
+            <div className="absolute bottom-[32%] flex items-center gap-3 bg-black/75 backdrop-blur-md px-6 py-3 rounded-full text-white font-black text-sm uppercase tracking-widest border border-white/20 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-20">
+              <Camera className="w-5 h-5 text-[#0047FF]" />
+              <span>Arahkan barang ke kamera</span>
+            </div>
+          )}
         </div>
       )}
 

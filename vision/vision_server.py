@@ -46,9 +46,10 @@ log = logging.getLogger("vision")
 YOLO_MODEL      = os.environ.get("YOLO_MODEL", "yolov8s-worldv2.pt")
 DINO_MODEL      = os.environ.get("DINO_MODEL", "facebook/dinov2-base")
 EMBED_DB_PATH   = Path("vision_embeddings.json")
-SCORE_THR       = float(os.environ.get("YOLO_SCORE_THR", "0.15"))
-SIMILARITY_THR  = float(os.environ.get("DINO_SIM_THR",  "0.40"))
-CONF_GAP_THR    = float(os.environ.get("DINO_GAP_THR",  "0.04"))   # Min gap #1-#2 agar tidak ambiguous
+SCORE_THR           = float(os.environ.get("YOLO_SCORE_THR",       "0.12"))  # Diturunkan agar YOLO lebih sensitif pada shape-only
+SIMILARITY_THR      = float(os.environ.get("DINO_SIM_THR",         "0.38"))  # Threshold dasar DINOv2
+SIMILARITY_THR_CROP = float(os.environ.get("DINO_SIM_THR_CROP",    "0.34"))  # Threshold lebih longgar untuk YOLO-crop ketat
+CONF_GAP_THR        = float(os.environ.get("DINO_GAP_THR",         "0.04"))  # Min gap #1-#2 agar tidak ambiguous
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Supabase config (dari .env atau environment)
@@ -125,10 +126,14 @@ class EmbedDB:
 
     def _rebuild_classes(self):
         """YOLO hanya pakai generic classes — tugasnya hanya crop region produk.
-        Identifikasi produk sepenuhnya dilakukan oleh DINOv2."""
+        Identifikasi produk sepenuhnya dilakukan oleh DINOv2.
+        Sertakan kelas shape-based agar YOLO bisa crop action figure / toy."""
         self.yolo_classes = [
             "product", "item", "snack", "bottle", "box",
-            "drink", "can", "cup", "packaging", "food", "object"
+            "drink", "can", "cup", "packaging", "food", "object",
+            # Shape-based / toy categories
+            "toy", "figure", "action figure", "doll", "figurine",
+            "collectible", "statue", "miniature", "model",
         ]
         self._rebuild_emb_matrix()
 
@@ -232,6 +237,32 @@ def _sharpen_image(bgr: np.ndarray) -> np.ndarray:
                        [-1,  5, -1],
                        [ 0, -1,  0]], dtype=np.float32)
     return cv2.filter2D(bgr, -1, kernel)
+
+def _multi_crop_embeddings(bgr: np.ndarray) -> List[np.ndarray]:
+    """
+    Hasilkan beberapa embedding dari varian crop gambar untuk produk shape-based.
+    Ini membantu ketika sudut pengambilan gambar tidak sesuai persis dengan referensi.
+    Menghasilkan: [full, center-crop, slight-zoom-in] → rata-rata ketiganya.
+    """
+    h, w = bgr.shape[:2]
+    variants = [bgr]
+
+    # Center crop (80% dari gambar)
+    margin_y, margin_x = int(h * 0.10), int(w * 0.10)
+    center_crop = bgr[margin_y:h - margin_y, margin_x:w - margin_x]
+    if center_crop.size > 0:
+        variants.append(center_crop)
+
+    # Slight zoom-in (60% tengah)
+    margin_y2, margin_x2 = int(h * 0.20), int(w * 0.20)
+    zoom_crop = bgr[margin_y2:h - margin_y2, margin_x2:w - margin_x2]
+    if zoom_crop.size > 0:
+        variants.append(zoom_crop)
+
+    embs = []
+    for v in variants:
+        embs.append(_extract_embedding(_bgr2pil(v)))
+    return embs
 
 def _crop_label_zone(bgr: np.ndarray) -> np.ndarray:
     """Crop zona label merek (40%–80% dari tinggi botol).
@@ -365,31 +396,47 @@ def sync_from_supabase() -> dict:
         embed_db.upsert_label_only(pid, name, ai_label)
         log.info(f"  [YOLO] Registered '{ai_label}' → '{name}'")
 
-        # ── Jika ada image_urls dan belum ada embedding, compute DINOv2 ──
-        existing_embs = embed_db.db.get(pid, {}).get("embeddings", [])
+        # ── Jika ada image_urls, compute DINOv2 embedding ──
+        # Cek jumlah gambar sekarang vs embedding yang tersimpan.
+        # Jika ada gambar baru ditambahkan (mis. foto action figure baru), re-embed.
+        existing_entry = embed_db.db.get(pid, {})
+        existing_embs  = existing_entry.get("embeddings", [])
+        existing_urls  = existing_entry.get("image_urls_cached", [])
+
         if image_urls:
-            if existing_embs:
-                log.info(f"  [DINO] '{name}' sudah punya {len(existing_embs)} embedding, skip re-download")
+            new_urls = [u for u in image_urls if u not in existing_urls]
+
+            if not new_urls and existing_embs:
+                # Semua URL sudah di-embed, skip
+                log.info(f"  [DINO] '{name}' sudah punya {len(existing_embs)} embedding ({len(image_urls)} gambar), skip")
                 with_emb += 1
                 continue
 
             new_embs = []
-            for url in image_urls:
-                log.info(f"  [DINO] Downloading image for '{name}' …")
+            urls_to_embed = new_urls if new_urls else image_urls
+            for url in urls_to_embed:
+                log.info(f"  [DINO] Downloading image for '{name}' ({url[:60]}) …")
                 bgr = _download_image(url)
                 if bgr is not None:
                     try:
                         pil = _bgr2pil(bgr)
                         emb = _extract_embedding(pil)
                         new_embs.append(emb.tolist())
+
+                        # Augment: flip horizontal untuk produk simetris/shape-based
+                        pil_flip = pil.transpose(Image.FLIP_LEFT_RIGHT)
+                        emb_flip = _extract_embedding(pil_flip)
+                        new_embs.append(emb_flip.tolist())
                     except Exception as e:
                         log.error(f"  [DINO] Error embedding '{name}': {e}")
                         sync_status["errors"].append(f"{name}: {e}")
-            
+
             if new_embs:
                 embed_db.upsert(pid, name, ai_label, new_embs)
+                # Simpan daftar URL agar bisa deteksi penambahan gambar baru
+                embed_db.db[pid]["image_urls_cached"] = list(set(existing_urls + image_urls))
                 with_emb += 1
-                log.info(f"  [DINO] ✅ {len(new_embs)} Embedding computed untuk '{name}'")
+                log.info(f"  [DINO] ✅ {len(new_embs)} embedding (+flip augment) untuk '{name}'")
             else:
                 log.warning(f"  [DINO] Gagal download image untuk '{name}'")
                 no_img += 1
@@ -570,27 +617,60 @@ async def detect(req: DetectRequest):
             crop = _crop_box(bgr, best_box)
             if crop.size == 0:
                 crop = bgr
+            using_yolo_crop = True
         else:
             crop = bgr
+            using_yolo_crop = False
 
         # Pertajam gambar agar teks/logo merek lebih distinktif
         crop_sharp = _sharpen_image(crop)
 
+        # Jika crop kecil (YOLO ketat), scale up agar DINOv2 punya detail cukup
+        crop_h, crop_w = crop_sharp.shape[:2]
+        if using_yolo_crop and (crop_h < 112 or crop_w < 112):
+            scale = max(112 / crop_h, 112 / crop_w, 1.0)
+            crop_sharp = cv2.resize(crop_sharp, (int(crop_w * scale), int(crop_h * scale)),
+                                    interpolation=cv2.INTER_LINEAR)
+            log.info(f"[DINO] Up-scaled crop dari {crop_w}x{crop_h} → {crop_sharp.shape[1]}x{crop_sharp.shape[0]}")
+
         # ── Pass 1: embedding dari crop penuh (tajam) ──────────────────
-        query_emb_full             = _extract_embedding(_bgr2pil(crop_sharp))
-        pid, entry, similarity, gap = embed_db.find_best_match(query_emb_full)
+        query_emb_full               = _extract_embedding(_bgr2pil(crop_sharp))
+        pid, entry, similarity, gap  = embed_db.find_best_match(query_emb_full)
         log.info(f"[DINO] Best match: '{entry['name'] if entry else 'none'}' sim={similarity:.3f} gap={gap:.3f}")
 
-        # ── Pass 2: jika gap kecil (ambiguous), pakai zona label ───────
-        if similarity >= SIMILARITY_THR and gap < CONF_GAP_THR:
+        # Threshold lebih rendah bila YOLO memberikan crop ketat (lebih sedikit noise latar belakang)
+        effective_thr = SIMILARITY_THR_CROP if using_yolo_crop else SIMILARITY_THR
+
+        # ── Pass 1b: untuk produk shape-based / toy, rata-rata beberapa crop varian ──
+        # Ini membantu jika sudut pandang tidak sama persis dengan referensi
+        if similarity < effective_thr:
+            multi_embs = _multi_crop_embeddings(crop_sharp)
+            if len(multi_embs) > 1:
+                avg_emb = np.mean(np.stack(multi_embs), axis=0).astype(np.float32)
+                pid_m, entry_m, sim_m, gap_m = embed_db.find_best_match(avg_emb)
+                log.info(f"[DINO-multi] '{entry_m['name'] if entry_m else 'none'}' sim={sim_m:.3f}")
+                if sim_m > similarity:
+                    pid, entry, similarity, gap = pid_m, entry_m, sim_m, gap_m
+                    log.info(f"[DINO] Multi-crop result lebih baik: sim={similarity:.3f}")
+
+        # ── Pass 2: jika gap kecil (ambiguous) & gap masuk akal, pakai zona label ──
+        # Label-zone disambig hanya berguna untuk produk botol/kemasan dengan merek teks.
+        # Produk shape-based (action figure, toy) tidak perlu crop zona label.
+        is_shape_like = (
+            entry is not None
+            and any(kw in (entry.get("label", "") + " " + entry.get("name", "")).lower()
+                    for kw in ["figure", "toy", "doll", "statue", "miniature", "model", "collectible",
+                               "figur", "mainan", "patung"])
+        )
+        if similarity >= effective_thr and gap < CONF_GAP_THR and not is_shape_like:
             log.info(f"[DINO] Gap={gap:.3f} < {CONF_GAP_THR} → coba label-zone crop untuk disambiguasi")
-            label_crop  = _crop_label_zone(crop_sharp)
+            label_crop      = _crop_label_zone(crop_sharp)
             query_emb_label = _extract_embedding(_bgr2pil(label_crop))
             pid2, entry2, sim2, gap2 = embed_db.find_best_match(query_emb_label)
             log.info(f"[DINO-label] '{entry2['name'] if entry2 else 'none'}' sim={sim2:.3f} gap={gap2:.3f}")
 
             # Ambil hasil terbaik: kombinasikan kedua similarity
-            if sim2 >= SIMILARITY_THR:
+            if sim2 >= effective_thr:
                 # Weighted average: label crop lebih dipercaya untuk disambiguasi merek
                 combined_full  = 0.40 * similarity
                 combined_label = 0.60 * sim2
@@ -606,9 +686,9 @@ async def detect(req: DetectRequest):
                     similarity = min(1.0, combined_full + combined_label)
                     log.info(f"[DINO] Kedua pass sepakat '{entry['name']}', boosted sim={similarity:.3f}")
 
-        if similarity >= SIMILARITY_THR:
+        if similarity >= effective_thr:
             source = "yolo+dino" if best_box is not None else "dino-only"
-            if gap < CONF_GAP_THR:
+            if gap < CONF_GAP_THR and not is_shape_like:
                 source += "+label-disambig"
 
             return {
@@ -624,7 +704,7 @@ async def detect(req: DetectRequest):
                 "product": {"id": pid, "name": entry["name"], "label": entry["label"]},
             }
         else:
-            log.info(f"[DINO] Similarity {similarity:.2f} < threshold {SIMILARITY_THR}")
+            log.info(f"[DINO] Similarity {similarity:.2f} < threshold {effective_thr}")
 
     return {
         "success":    False,
